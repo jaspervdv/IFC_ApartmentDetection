@@ -1,46 +1,61 @@
-/********************************************************************************
- *                                                                              *
- * This file is part of IfcOpenShell.                                           *
- *                                                                              *
- * IfcOpenShell is free software: you can redistribute it and/or modify         *
- * it under the terms of the Lesser GNU General Public License as published by  *
- * the Free Software Foundation, either version 3.0 of the License, or          *
- * (at your option) any later version.                                          *
- *                                                                              *
- * IfcOpenShell is distributed in the hope that it will be useful,              *
- * but WITHOUT ANY WARRANTY; without even the implied warranty of               *
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the                 *
- * Lesser GNU General Public License for more details.                          *
- *                                                                              *
- * You should have received a copy of the Lesser GNU General Public License     *
- * along with this program. If not, see <http://www.gnu.org/licenses/>.         *
- *                                                                              *
- ********************************************************************************/
-
- // TODO: Multiple schemas
+// TODO: Multiple schemas
 #define IfcSchema Ifc4
 
+// basic includes
 #include <iostream>
-#include <ifcparse/IfcFile.h>
-#include <ifcparse/Ifc4.h>
+#include <sstream>
+#include <fstream>
+#include <string>
+
+// boost includes
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
+
+// openCASCADE includes
+#include <TopoDS.hxx>
+
+// IfcOpenShell includes
+#include <ifcparse/IfcFile.h>
+#include <ifcparse/IfcHierarchyHelper.h>
+#include <ifcgeom/IfcGeom.h>
+#include <ifcgeom/IfcGeomRepresentation.h>
+#include <ifcgeom_schema_agnostic/kernel.h>
 
 #if USE_VLD
 #include <vld.h>
 #endif
 
 int main(int argc, char** argv) {
+	Logger::SetOutput(&std::cout, &std::cout);
 
 	std::string sourcePath = "D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc";
 	std::string exportPath = "D:/Documents/Uni/Thesis/sources/Models/exports/AC20-FZK-Haus.ifc";
 
-	Logger::SetOutput(&std::cout, &std::cout);
+	//find schema of file
+	std::ifstream infile(sourcePath);
+	std::string line;
+	while (std::getline(infile, line)) 
+	{
+		if (line[0] == '#') {
+			break;
+		}
 
-	// get file path
-	IfcParse::IfcFile workingFile(sourcePath);
+		if (line.find("FILE_SCHEMA(('IFC4'))") != std::string::npos) {
+			std::cout << "Valid scheme" << std::endl;
+			break;
+		} else if (line.find("FILE_SCHEMA(('IFC2X3'))") != std::string::npos) {
+			//TODO translate IFC2x3 to IFC4
+			break;
+		}
+	
+	}
+	infile.close();
 
-	if (!workingFile.good()) {
+	// get source file
+	IfcParse::IfcFile sourceFile(sourcePath);
+	IfcParse::IfcFile* pSourceFile = &sourceFile;
+
+	if (!pSourceFile->good()) {
 		std::cout << "Unable to parse .ifc file" << std::endl;
 		return 1;
 	}
@@ -48,13 +63,17 @@ int main(int argc, char** argv) {
 		std::cout << "Valid IFC file found" << std::endl;
 	}
 
-	// TODO seperate flat and angled slaps
-	// TODO make buffer for flat slaps
-	// TODO find buffer style for angled slaps
- 	// TODO select objects within the buffer
-	// TODO store to file
+	std::cout << std::endl;
 
-	IfcSchema::IfcBuildingElement::list::ptr elements = workingFile.instances_by_type<IfcSchema::IfcBuildingElement>();
+	IfcGeom::Kernel my_kernel(pSourceFile);
+
+	// create working basefile
+	IfcHierarchyHelper<IfcSchema> workingFile;
+	workingFile.header().file_name().name("test.ifc");
+
+	std::vector<IfcUtil::IfcBaseClass*> area_ref;
+
+	IfcSchema::IfcBuildingElement::list::ptr elements = pSourceFile->instances_by_type<IfcSchema::IfcBuildingElement>();
 	std::cout << "Found " << elements->size() << " elements " << std::endl;
 
 	for (IfcSchema::IfcBuildingElement::list::it it = elements->begin(); it != elements->end(); ++it) {
@@ -62,38 +81,103 @@ int main(int argc, char** argv) {
 
 		const IfcSchema::IfcSlab* slab;
 
+		// select all the slab objects
 		if ((slab = element->as<IfcSchema::IfcSlab>()) != 0) {
-			std::cout << element->data().toString() << std::endl;
+			// get the IfcShapeRepresentation
+			auto slabProduct = slab->Representation()->Representations();
+
+			std::cout << slab->data().toString() << std::endl;
+
+			for (auto et = slabProduct.get()->begin(); et != slabProduct.get()->end(); et++) {
+				const IfcSchema::IfcRepresentation* slabRepresentation = *et;
+
+				std::cout << slabRepresentation->data().toString() << std::endl;
+
+				// select the body of the slabs (ignore the bounding boxes)
+				if (slabRepresentation->data().getArgument(1)->toString() == "'Body'")
+				{
+					// select the geometry format
+					auto slabItems = slabRepresentation->Items();
+
+					for (auto st = slabItems.get()->begin(); st != slabItems.get()->end(); st++)
+					{
+						IfcSchema::IfcRepresentationItem* slabItem = *st;
+
+						auto ob = my_kernel.convert(slabItem);
+
+						// move to OpenCASCADE
+						const TopoDS_Shape shape = ob[0].Shape();
+
+						// set variables for top face selection
+						TopoDS_Face topFace;
+						double topHeight = -9999;
+						int faceCount = 0;
+
+						// loop through all faces of slab
+						TopExp_Explorer expl;
+						for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next())
+						{
+							faceCount++;
+							TopoDS_Face face = TopoDS::Face(expl.Current());
+							BRepAdaptor_Surface brepAdaptorSurface(face, Standard_True);
+							// TODO determine horizontal face
+							// TODO determine (and ignore) not flat surfaces
+
+							// select floor top face
+							double faceHeight = face.Location().Transformation().TranslationPart().Z();
+
+							std::cout << faceHeight << std::endl;
+							if (faceHeight > topHeight)
+							{
+								topHeight = faceHeight;
+								topFace = face;
+							}
+						}
+
+						std::cout << topHeight << std::endl;
+
+						// select points of the top face
+						for (expl.Init(topFace, TopAbs_VERTEX); expl.More(); expl.Next()) 
+						{
+							TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+
+							// untranslated point!
+							gp_Pnt pt = BRep_Tool::Pnt(vertex);
+
+							//TODO translate
+
+							std::cout << "(" << pt.X() << ", " << pt.Y() << ", " << pt.Z() << ")" << std::endl;
+
+						}
+
+						//TODO select the floor level
+						//TODO pair floors on the same level
+						//TODO igonore (relative) small floors
+						//TODO evaluate if floor is flat
+
+						//TODO order floors
+
+					}
+				}
+			}
 		}
 
 	}
 
+
+
+
 	// write to file
+	/*
 	std::ofstream storageFile;
 	storageFile.open(exportPath);
 	std::cout << "exporting" << std::endl;
-	storageFile << workingFile;
+	storageFile << sourceFile;
 	std::cout << "exported succesfully" << std::endl;
 	storageFile.close();
 
-	/*
-	for (IfcSchema::IfcBuildingElement::list::it it = elements->begin(); it != elements->end(); ++it) {
-
-		const IfcSchema::IfcBuildingElement* element = *it;
-		std::cout << element->data().toString() << std::endl;
-
-		const IfcSchema::IfcWindow* window;
-		if ((window = element->as<IfcSchema::IfcWindow>()) != 0) {
-			if (window->hasOverallWidth() && window->hasOverallHeight()) {
-				const double area = window->OverallWidth() * window->OverallHeight();
-				std::cout << "The area of this window is " << area << std::endl;
-			}
-		}
-
-	}*/
-
-
 	std::cout << "last line executed" << std::endl;
+	*/
 	return 0;
 
 }
