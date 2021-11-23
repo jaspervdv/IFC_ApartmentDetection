@@ -1,0 +1,28 @@
+Moscow method
+
+Must have:
+•	Be able to load IFC models with the .ifc extension
+•	Evaluate nested IFC models (structural and architectural) as one
+•	Automatic detection of floors
+•	Automatic detection of rooms
+•	Detect the objects regardless of the language in which the IFC model has been made
+•	Detect the objects regardless of the program package in which the IFC model has been made
+•	Output Vital information about detected objects
+Should have:
+•	Automatic detection of appartements 
+•	Detailed output about errors that prevent detection of objects
+•	Useable performance when processing bigger models 
+Could have:
+•	Automatic model repair to mend (minor) issues that would prevent regular object detection and store this in a new (corrected) file
+o	Mislabeled object floors
+o	Walls that span multiple floors
+•	3D viewer
+o	Shows corrected locations
+o	Shows locations where problems occur
+•	GUI
+•	Easy file selection
+•	Automatic room labelling 
+Will not have:
+•	Automatic model repair to mend (major) issues that would prevent regular object detection
+o	Missing objects
+o	Misplaced objects
