@@ -1,6 +1,7 @@
 // TODO: Multiple schemas
 #define IfcSchema Ifc4
 
+
 // basic includes
 #include <iostream>
 #include <sstream>
@@ -13,6 +14,9 @@
 
 // openCASCADE includes
 #include <TopoDS.hxx>
+#include <BRep_Builder.hxx>
+#include <BRepBndLib.hxx>
+#include <Bnd_Box.hxx>
 
 // IfcOpenShell includes
 #include <ifcparse/IfcFile.h>
@@ -52,10 +56,9 @@ int main(int argc, char** argv) {
 	infile.close();
 
 	// get source file
-	IfcParse::IfcFile sourceFile(sourcePath);
-	IfcParse::IfcFile* pSourceFile = &sourceFile;
+	IfcParse::IfcFile* SourceFile = new IfcParse::IfcFile(sourcePath);
 
-	if (!pSourceFile->good()) {
+	if (!SourceFile->good()) {
 		std::cout << "Unable to parse .ifc file" << std::endl;
 		return 1;
 	}
@@ -64,8 +67,18 @@ int main(int argc, char** argv) {
 	}
 
 	std::cout << std::endl;
+	IfcGeom::Kernel my_kernel(SourceFile);
 
-	IfcGeom::Kernel my_kernel(pSourceFile);
+	IfcSchema::IfcProduct::list::ptr prods = SourceFile->instances_by_type<IfcSchema::IfcProduct>();
+	for (IfcSchema::IfcProduct::list::it it = prods->begin(); it != prods->end(); ++it) {
+		IfcSchema::IfcProduct* prod = *it;
+
+		//gp_Trsf trsf = my_kernel.convert(prod->ObjectPlacement());
+		//const gp_XYZ& xyz = trsf.TranslationPart();
+		//std::cout << prod->GlobalId() << ": " <<	xyz.X() << " " << xyz.Y() << " " << xyz.Z() << std::endl;
+	}
+
+
 
 	// create working basefile
 	IfcHierarchyHelper<IfcSchema> workingFile;
@@ -73,7 +86,7 @@ int main(int argc, char** argv) {
 
 	std::vector<IfcUtil::IfcBaseClass*> area_ref;
 
-	IfcSchema::IfcBuildingElement::list::ptr elements = pSourceFile->instances_by_type<IfcSchema::IfcBuildingElement>();
+	IfcSchema::IfcBuildingElement::list::ptr elements = SourceFile->instances_by_type<IfcSchema::IfcBuildingElement>();
 	std::cout << "Found " << elements->size() << " elements " << std::endl;
 
 	for (IfcSchema::IfcBuildingElement::list::it it = elements->begin(); it != elements->end(); ++it) {
@@ -108,6 +121,11 @@ int main(int argc, char** argv) {
 						// move to OpenCASCADE
 						const TopoDS_Shape shape = ob[0].Shape();
 
+						TopLoc_Location origin;
+
+
+						//shape.Located();
+
 						// set variables for top face selection
 						TopoDS_Face topFace;
 						double topHeight = -9999;
@@ -121,7 +139,7 @@ int main(int argc, char** argv) {
 							TopoDS_Face face = TopoDS::Face(expl.Current());
 							BRepAdaptor_Surface brepAdaptorSurface(face, Standard_True);
 							// TODO determine horizontal face
-							// TODO determine (and ignore) not flat surfaces
+							// TODO how to deal with not flat surfaces
 
 							// select floor top face
 							double faceHeight = face.Location().Transformation().TranslationPart().Z();
@@ -136,6 +154,11 @@ int main(int argc, char** argv) {
 
 						std::cout << topHeight << std::endl;
 
+						// help for flatness determening
+						int tcount = 0;
+						int hcount = 0;
+						std::vector<double> detectedHeight = std::vector<double>();
+
 						// select points of the top face
 						for (expl.Init(topFace, TopAbs_VERTEX); expl.More(); expl.Next()) 
 						{
@@ -143,12 +166,17 @@ int main(int argc, char** argv) {
 
 							// untranslated point!
 							gp_Pnt pt = BRep_Tool::Pnt(vertex);
+							double xyz_z = pt.Z();
+
+							if (!std::count(detectedHeight.begin(), detectedHeight.end(), xyz_z)) {detectedHeight.emplace_back(xyz_z);}
 
 							//TODO translate
-
 							std::cout << "(" << pt.X() << ", " << pt.Y() << ", " << pt.Z() << ")" << std::endl;
 
+							tcount++;
 						}
+
+						if (detectedHeight.size() > 1){std::cout << "not flat" << std::endl;}
 
 						//TODO select the floor level
 						//TODO pair floors on the same level
