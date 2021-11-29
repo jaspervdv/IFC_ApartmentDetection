@@ -67,24 +67,12 @@ int main(int argc, char** argv) {
 	}
 
 	std::cout << std::endl;
-	IfcGeom::Kernel my_kernel(SourceFile);
-
-	IfcSchema::IfcProduct::list::ptr prods = SourceFile->instances_by_type<IfcSchema::IfcProduct>();
-	for (IfcSchema::IfcProduct::list::it it = prods->begin(); it != prods->end(); ++it) {
-		IfcSchema::IfcProduct* prod = *it;
-
-		//gp_Trsf trsf = my_kernel.convert(prod->ObjectPlacement());
-		//const gp_XYZ& xyz = trsf.TranslationPart();
-		//std::cout << prod->GlobalId() << ": " <<	xyz.X() << " " << xyz.Y() << " " << xyz.Z() << std::endl;
-	}
-
-
 
 	// create working basefile
 	IfcHierarchyHelper<IfcSchema> workingFile;
 	workingFile.header().file_name().name("test.ifc");
 
-	std::vector<IfcUtil::IfcBaseClass*> area_ref;
+	IfcGeom::Kernel my_kernel(SourceFile);
 
 	IfcSchema::IfcBuildingElement::list::ptr elements = SourceFile->instances_by_type<IfcSchema::IfcBuildingElement>();
 	std::cout << "Found " << elements->size() << " elements " << std::endl;
@@ -96,15 +84,18 @@ int main(int argc, char** argv) {
 
 		// select all the slab objects
 		if ((slab = element->as<IfcSchema::IfcSlab>()) != 0) {
+			
 			// get the IfcShapeRepresentation
 			auto slabProduct = slab->Representation()->Representations();
 
 			std::cout << slab->data().toString() << std::endl;
 
+			//get the global coordinate of the local origin
+			gp_Trsf trsf;
+			my_kernel.convert_placement(slab->ObjectPlacement(), trsf);
+
 			for (auto et = slabProduct.get()->begin(); et != slabProduct.get()->end(); et++) {
 				const IfcSchema::IfcRepresentation* slabRepresentation = *et;
-
-				std::cout << slabRepresentation->data().toString() << std::endl;
 
 				// select the body of the slabs (ignore the bounding boxes)
 				if (slabRepresentation->data().getArgument(1)->toString() == "'Body'")
@@ -119,12 +110,8 @@ int main(int argc, char** argv) {
 						auto ob = my_kernel.convert(slabItem);
 
 						// move to OpenCASCADE
-						const TopoDS_Shape shape = ob[0].Shape();
-
-						TopLoc_Location origin;
-
-
-						//shape.Located();
+						const TopoDS_Shape rShape = ob[0].Shape();
+						const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
 
 						// set variables for top face selection
 						TopoDS_Face topFace;
@@ -133,18 +120,16 @@ int main(int argc, char** argv) {
 
 						// loop through all faces of slab
 						TopExp_Explorer expl;
-						for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next())
+						for (expl.Init(aShape, TopAbs_FACE); expl.More(); expl.Next())
 						{
 							faceCount++;
 							TopoDS_Face face = TopoDS::Face(expl.Current());
 							BRepAdaptor_Surface brepAdaptorSurface(face, Standard_True);
-							// TODO determine horizontal face
-							// TODO how to deal with not flat surfaces
+
 
 							// select floor top face
 							double faceHeight = face.Location().Transformation().TranslationPart().Z();
 
-							std::cout << faceHeight << std::endl;
 							if (faceHeight > topHeight)
 							{
 								topHeight = faceHeight;
@@ -177,6 +162,8 @@ int main(int argc, char** argv) {
 						}
 
 						if (detectedHeight.size() > 1){std::cout << "not flat" << std::endl;}
+
+						// TODO how to deal with not flat surfaces
 
 						//TODO select the floor level
 						//TODO pair floors on the same level
