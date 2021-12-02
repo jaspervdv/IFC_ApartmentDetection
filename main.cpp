@@ -1,5 +1,5 @@
 // TODO: Multiple schemas
-#define IfcSchema Ifc4
+#define IfcSchema Ifc2x3
 
 // basic includes
 #include <iostream>
@@ -35,7 +35,7 @@
 int main(int argc, char** argv) {
 	Logger::SetOutput(&std::cout, &std::cout);
 
-	std::string sourcePath = "D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc";
+	std::string sourcePath = "D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc";
 	std::string exportPath = "D:/Documents/Uni/Thesis/sources/Models/exports/AC20-FZK-Haus.ifc";
 
 	//find schema of file
@@ -78,6 +78,84 @@ int main(int argc, char** argv) {
 
 	IfcGeom::Kernel my_kernel(SourceFile);
 
+	// check if unit assignment is valid
+	IfcSchema::IfcUnitAssignment::list::ptr presentUnits = SourceFile->instances_by_type<IfcSchema::IfcUnitAssignment>();
+	if (presentUnits.get()->size() == 0) {
+		std::cout << "[Error] No unit assignment has been found" << std::endl;
+		return 0;
+	}
+	else if (presentUnits.get()->size() > 1)
+	{
+		std::cout << "[Error] Multiple unit assignments have been found" << std::endl;
+		return 0;
+	}
+	
+	// get the unit
+	double lengthMultiplier = 0;
+	double areaMultiplier = 0;
+	double volumeMultiplier = 0;
+
+	for (IfcSchema::IfcUnitAssignment::list::it it = presentUnits->begin(); it != presentUnits->end(); ++it)
+	{
+		const IfcSchema::IfcUnitAssignment* itUnits = *it;
+		auto units = itUnits->Units();
+		
+		for (auto et = units.get()->begin(); et != units.get()->end(); et++) {
+			auto unit = *et;
+
+			if (unit->declaration().type() == 902 || unit->declaration().type() == 765) // select the IfcSIUnit
+			{
+				std::string unitType = unit->data().getArgument(1)->toString();
+				std::string SiUnitBase = unit->data().getArgument(3)->toString();
+				std::string SiUnitAdd = unit->data().getArgument(2)->toString();
+
+				if (unitType == ".LENGTHUNIT.")
+				{
+					if (SiUnitBase == ".METRE.") { lengthMultiplier = 1; }
+					if (SiUnitAdd == ".MILLI.") { lengthMultiplier = lengthMultiplier/1000; }
+				}
+				else if (unitType == ".AREAUNIT.")
+				{
+					if (SiUnitBase == ".SQUARE_METRE.") { areaMultiplier = 1; }
+					if (SiUnitAdd == ".MILLI.") { areaMultiplier = areaMultiplier / pow(1000,2); }
+				}
+				if (unitType == ".VOLUMEUNIT.")
+				{
+					if (SiUnitBase == ".CUBIC_METRE.") { volumeMultiplier = 1; }
+					if (SiUnitAdd == ".MILLI.") { volumeMultiplier = volumeMultiplier / pow(1000, 3); }
+				}
+			}
+		}
+	}
+
+	// check if units have been found
+	std::cout << "found units:" << std::endl;
+	if (!lengthMultiplier)
+	{
+		std::cout << "[Error] SI unit for length cannot be found!" << std::endl;
+		return 0;
+	}
+	else if (lengthMultiplier == 1) { std::cout << "- Lenght in metre" << std::endl; }
+	else if (lengthMultiplier == 0.001) { std::cout << "- Lenght in millimetre" << std::endl; }
+
+	if (!areaMultiplier)
+	{
+		std::cout << "[Error] SI unit for area cannot be found!" << std::endl;
+		return 0;
+	}
+	else if (areaMultiplier == 1) { std::cout << "- Area in square metre" << std::endl; }
+	else if (areaMultiplier == 0.000001) { std::cout << "- Area in square millimetre" << std::endl; }
+
+	if (!volumeMultiplier)
+	{
+		std::cout << "[Error] SI unit for volume cannot be found!" << std::endl;
+		return 0;
+	}
+	else if (volumeMultiplier == 1) { std::cout << "- Volume in cubic metre" << std::endl; }
+	else if (volumeMultiplier == 0.000000001) { std::cout << "- Volume in cubic millimetre" << std::endl; }
+
+	std::cout << std::endl;
+
 	IfcSchema::IfcBuildingElement::list::ptr elements = SourceFile->instances_by_type<IfcSchema::IfcBuildingElement>();
 	std::cout << "Found " << elements->size() << " elements " << std::endl;
 
@@ -87,17 +165,17 @@ int main(int argc, char** argv) {
 	std::vector<double> floorElevation;
 	std::vector<TopoDS_Face> floorFaces;
 
-	double bigArea = 0;
-
 	for (IfcSchema::IfcBuildingStorey::list::it it = storeys->begin(); it != storeys->end(); ++it)
 	{
 		const IfcSchema::IfcBuildingStorey* storey = *it;
-		storeyElevation.emplace_back(storey->Elevation());
+		storeyElevation.emplace_back(storey->Elevation() * lengthMultiplier);
 	}
 
 	if (!storeyElevation.size()) {std::cout << "No storeys can be found" << std::endl;}
 
 	IfcSchema::IfcSlab::list::ptr slabs = SourceFile->instances_by_type<IfcSchema::IfcSlab>();
+
+	double bigArea = 0;
 
 	for (IfcSchema::IfcSlab::list::it it = slabs->begin(); it != slabs->end(); ++it) {
 		const IfcSchema::IfcSlab* slab = *it;
@@ -106,7 +184,7 @@ int main(int argc, char** argv) {
 		auto slabProduct = slab->Representation()->Representations();
 
 		// can be removed in future
-		std::cout << slab->data().toString() << std::endl;
+		//std::cout << slab->data().toString() << std::endl;
 
 		//get the global coordinate of the local origin
 		gp_Trsf trsf;
@@ -431,7 +509,10 @@ int main(int argc, char** argv) {
 		}
 
 	}
-	
+
+	std::sort(storeyElevation.begin(), storeyElevation.end());
+	std::sort(filteredTopElevation.begin(), filteredTopElevation.end());
+	/*
 	std::cout << "storey elevations: " << std::endl;
 	for (unsigned int i = 0; i < storeyElevation.size(); i++)
 	{
@@ -443,7 +524,7 @@ int main(int argc, char** argv) {
 	{
 		std::cout << filteredTopElevation[i] << std::endl;
 	}
-
+	*/
 	// write to file
 	/*
 	std::ofstream storageFile;
