@@ -11,7 +11,6 @@ helper::helper(std::string path) {
 	if (!good) 
 	{ 
 		std::cout << "Unable to parse .ifc file" << std::endl; 
-
 	}
 	else { 
 		std::cout << "Valid IFC file found" << std::endl; 
@@ -32,7 +31,10 @@ void helper::findSchema(std::string path) {
 
 	while (std::getline(infile, line))
 	{
-		if (line[0] == '#') { break; }
+		if (line[0] == '#') {
+			std::cout << "[Warning] No valid ifc scheme found" << std::endl;
+			break; 
+		}
 
 		if (line.find("FILE_SCHEMA(('IFC4'))") != std::string::npos) {
 			std::cout << "Valid scheme found: IFC4" << std::endl;
@@ -42,7 +44,18 @@ void helper::findSchema(std::string path) {
 			std::cout << "Valid scheme found: IFC2X3" << std::endl;
 			break;
 		}
-
+		else if (line.find("FILE_SCHEMA(('IFC4x1'))") != std::string::npos) {
+			std::cout << "Valid scheme found: IFC4x1" << std::endl;
+			break;
+		}
+		else if (line.find("FILE_SCHEMA(('IFC4x2'))") != std::string::npos) {
+			std::cout << "Valid scheme found: IFC4x2" << std::endl;
+			break;
+		}
+		else if (line.find("FILE_SCHEMA(('IFC4x3'))") != std::string::npos) {
+			std::cout << "Valid scheme found: IFC4x3" << std::endl;
+			break;
+		}
 	}
 	infile.close();
 }

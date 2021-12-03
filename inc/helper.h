@@ -4,7 +4,7 @@
 #include <boost/log/trivial.hpp>
 
 #include <ifcparse/IfcFile.h>
-#include <ifcparse/IfcHierarchyHelper.h>
+//#include <ifcparse/IfcHierarchyHelper.h>
 #include <ifcgeom/IfcGeom.h>
 #include <ifcgeom/IfcGeomRepresentation.h>
 #include <ifcgeom_schema_agnostic/kernel.h>
@@ -31,9 +31,6 @@ private:
 	void setUnits(IfcParse::IfcFile* file);
 
 public:
-
-	// construct an empty helper 
-	explicit helper() = default;
 	
 	/* 
 	construct and populate a helper
