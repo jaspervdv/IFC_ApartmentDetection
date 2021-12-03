@@ -47,6 +47,7 @@ string(REGEX REPLACE "([^;]+)" "${OpenCASCADEC_LIBRARY_DIR}/\\1.lib" OCC_LIBRARI
 
 add_executable(${PROJECT_NAME} 
 main.cpp
+inc/helper.cpp
 )
 
 foreach(LIB ${IFC_LIBRARIES})
@@ -60,6 +61,7 @@ endforeach()
 foreach(LIB ${Boost_LIBRARIES})
     message(STATUS "Boost libraries are ${LIB}")
 endforeach()
+
 
 target_link_libraries(${PROJECT_NAME} ${OCC_LIBRARIES} ${IFC_LIBRARIES} ${Boost_LIBRARIES}  ${BCRYPT_LIBRARIES} ws2_32.lib)
 
