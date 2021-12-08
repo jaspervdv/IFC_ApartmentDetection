@@ -1,5 +1,5 @@
 // TODO: Multiple schemas
-#define IfcSchema Ifc2x3
+#define IfcSchema Ifc4
 
 #include "inc/helper.h"
 #include "inc/floorProcessor.h"
@@ -43,7 +43,8 @@ int main(int argc, char** argv) {
 	std::string exportPath = "D:/Documents/Uni/Thesis/sources/Models/exports/AC20-FZK-Haus.ifc";
 
 	std::vector<std::string> sourcePathArray = {
-		"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
+		"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
 		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
 		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
 	};
@@ -65,12 +66,13 @@ int main(int argc, char** argv) {
 		hFiles.emplace_back(h);
 	}
 
+
 	// evaluate the storeys
 	for (size_t i = 0; i < hFiles.size(); i++)
 	{
 		std::vector<double> storeyElevation = floorProcessor::getStoreyElevations(hFiles[i]);
 
-		std::vector<std::vector<double>> floorElevation = floorProcessor::getFloorElevations(hFiles[i]);
+		std::vector<double> floorElevation = floorProcessor::getFloorElevations(hFiles[i]);
 
 		// create new storeys if needed
 		if (!floorProcessor::compareElevations(storeyElevation, floorElevation))
@@ -82,45 +84,40 @@ int main(int argc, char** argv) {
 			floorProcessor::printLevels(floorElevation);
 
 			// TODO wipe storeys
-			// TODO create new storeys
+
+
+
+			// create new storeys			
+			for (size_t j = 0; j < floorElevation.size(); j++)
+			{
+				auto storeyObject = hFiles[i]->getHierachyHelper()->addBuildingStorey();
+				storeyObject->setElevation(floorElevation[j]);
+				storeyObject->setName("Floor");
+				storeyObject->setDescription("Automatically generated storey");
+			}
+
+
 			// TODO match objects to new storeys
 		}
-
 		
 	}
 	//TODO clash detection
 	
-
-	IfcSchema::IfcBuildingStorey* newFloor = new IfcSchema::IfcBuildingStorey(
-		guid(),						// GlobalID
-		0,							//OwnerHistory
-		std::string("floor"),		//Name
-		boost::none,				// Description
-		boost::none,				// ObjectType
-		0,							// ObjectPlacement
-		0,							// Representation
-		boost::none,				// Tag
-		IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT, // Composition type
-		0
-	);
-
-	
-
 	// create working basefile
 	IfcHierarchyHelper<IfcSchema> workingFile;
 	workingFile.header().file_name().name("test.ifc");
 
 	// write to file
-	/*
+	
 	std::ofstream storageFile;
 	storageFile.open(exportPath);
 	std::cout << "exporting" << std::endl;
-	storageFile << sourceFile;
+	storageFile << *hFiles[0]->getHierachyHelper();
 	std::cout << "exported succesfully" << std::endl;
 	storageFile.close();
 
 	std::cout << "last line executed" << std::endl;
-	*/
+	
 	return 0;
 
 }

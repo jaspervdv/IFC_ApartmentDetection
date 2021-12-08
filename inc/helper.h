@@ -1,10 +1,10 @@
-#define IfcSchema Ifc2x3
+#define IfcSchema Ifc4
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
 
 #include <ifcparse/IfcFile.h>
-//#include <ifcparse/IfcHierarchyHelper.h>
+#include <ifcparse/IfcHierarchyHelper.h>
 #include <ifcgeom/IfcGeom.h>
 #include <ifcgeom/IfcGeomRepresentation.h>
 #include <ifcgeom_schema_agnostic/kernel.h>
@@ -23,6 +23,7 @@ private:
 
 	IfcParse::IfcFile* file_;
 	IfcGeom::Kernel* kernel_;
+	IfcHierarchyHelper<IfcSchema>* hierarchy_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
@@ -59,6 +60,8 @@ public:
 
 	// returns a pointer to the kernel
 	IfcGeom::Kernel* getKernel() const { return kernel_; }
+
+	IfcHierarchyHelper<IfcSchema>* getHierachyHelper() { return hierarchy_; }
 };
 
 #endif // HELPER_HELPER_H

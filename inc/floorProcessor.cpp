@@ -11,9 +11,6 @@ std::vector<TopoDS_Face> floorProcessor::getSlabFaces(helper* data) {
 		// get the IfcShapeRepresentation
 		auto slabProduct = slab->Representation()->Representations();
 
-		// can be removed in future
-		//std::cout << slab->data().toString() << std::endl;
-
 		//get the global coordinate of the local origin
 		gp_Trsf trsf;
 		data->getKernel()->convert_placement(slab->ObjectPlacement(), trsf);
@@ -82,247 +79,146 @@ std::vector<double> floorProcessor::getFaceAreas(std::vector<TopoDS_Face> faces)
 	return floorArea;
 }
 
-std::vector<int> floorProcessor::getPairing(std::vector<TopoDS_Face> faces) {
+std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> faces) {
+	bool debug = false;
 
 	// grouping floor faces by connection
-	bool sorted = false;
 	std::vector<int> pairing(faces.size(), -1);
+	std::vector<double> z;
 	int group = 0;
-	int maxIterations = 1000; //TODO scale based on amount of present slabs
-	int curIteration = 0;
-	double allowedDistance = 0.05;
 
-	while (!sorted)
-	{
-		if (curIteration == maxIterations)
+	// pair per "pure" elevation
+	for (size_t i = 0; i < faces.size(); i++) {
+		
+		if (pairing[i] == -1)
 		{
-			// TODO return error but continue with the process
-			std::cout << "[Warning] Floorslab matching has been unsuccesful " << std::endl;
+			pairing[i] = group;
+			group++;
 		}
 
-		sorted = true;
-		for (size_t i = 0; i < faces.size(); i++)
+		TopoDS_Face rfloorFace = faces[i];
+		double height = rfloorFace.Location().Transformation().TranslationPart().Z();
+		z.emplace_back(height);
+
+		for (size_t j = 0; j < faces.size(); j++)
 		{
-
-			// face has not been given a group yet
-			if (pairing[i] == -1)
+			if (j <= i) { continue; }
+			if (faces[j].Location().Transformation().TranslationPart().Z() == height)
 			{
-				pairing[i] = group;
-				group++;
+				pairing[j] = pairing[i];
 			}
+		}
+	}
 
-			TopoDS_Face rfloorFace = faces[i];
-			std::vector<gp_Pnt> floorPoints;
+	bool consolidated = false;
+	int iteration = 0;
+	std::vector<double> finalElevationList;
 
-			TopExp_Explorer expl;
-			for (expl.Init(rfloorFace, TopAbs_VERTEX); expl.More(); expl.Next())
+	double t = 1;
+	int maxIterations = 1;
+
+	while (!consolidated)
+	{
+		// find smallest difference between "pure" elevations
+		std::vector<double> currentElevations;
+		for (size_t i = 0; i < group; i++)
+		{
+			for (size_t j = 0; j < pairing.size(); j++)
 			{
-				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-				floorPoints.emplace_back(BRep_Tool::Pnt(vertex));
-			}
-
-			for (size_t j = 0; j < faces.size(); j++)
-			{
-				if (i == j) { continue; }
-				if (pairing[i] == pairing[j] && pairing[i] != -1) { continue; }
-
-				TopoDS_Face lfloorFace = faces[j];
-
-				for (expl.Init(lfloorFace, TopAbs_VERTEX); expl.More(); expl.Next())
-				{
-					TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-					gp_Pnt pt = BRep_Tool::Pnt(vertex);
-
-					for (size_t k = 0; k < floorPoints.size(); k++)
-					{
-						gp_Pnt evalPoint = floorPoints[k];
-
-						// look for neighbours
-						// TODO change to allow neighbours that are not connected with cornerpoints
-						if (pt.X() > evalPoint.X() - allowedDistance && pt.X() < evalPoint.X() + allowedDistance &&
-							pt.Y() > evalPoint.Y() - allowedDistance && pt.Y() < evalPoint.Y() + allowedDistance &&
-							pt.Z() > evalPoint.Z() - allowedDistance && pt.Z() < evalPoint.Z() + allowedDistance)
-						{
-							int base = pairing[j];
-							int change = pairing[i];
-
-							for (size_t l = 0; l < pairing.size(); l++)
-							{
-								if (pairing[l] == base && pairing[l] != -1) { pairing[l] = change; }
-							}
-							pairing[j] = pairing[i];
-							sorted = false; // not finished sorting if a neighbour is found
-							continue;
-						}
-
-					}
-
+				if (pairing[j] == i) {
+					currentElevations.emplace_back(z[j]);
+					break;
 				}
 			}
-
 		}
-		curIteration++;
-	}
 
-	// correct possible holes in the pairing list
-	group = group - 1;
-	int stableGroup = group;
-
-	for (size_t i = 0; i < stableGroup; i++)
-	{
-		auto it = std::find(pairing.begin(), pairing.end(), i);
-
-		if (it != pairing.end()) { continue; }
-
-		int minDistance = 9999;
-		for (size_t j = 0; j < pairing.size(); j++)
+		double smallestDiff = 9000;
+		std::tuple<int, int> smallDistanceIndex;
+		for (size_t i = 0; i < currentElevations.size(); i++)
 		{
-			if (pairing[j] > i)
+			for (size_t j = i; j < currentElevations.size(); j++)
 			{
-				int distance = pairing[j] - i;
-				if (distance < minDistance) { minDistance = distance; }
-			}
-		}
-		for (size_t j = 0; j < pairing.size(); j++)
-		{
-			if (pairing[j] > i) { pairing[j] = pairing[j] - minDistance; }
-		}
-		if (minDistance < 9999) { group = group - minDistance; }
-	}
-
-	return pairing;
-}
-
-
-std::vector<std::vector<double>> floorProcessor::getLevel(std::vector<TopoDS_Face> faces, std::vector<int> pairs)
-{
-	double allowedDistance = 0.05;
-
-	// find the amount of groups that have been created
-	int groupsize = 0;
-	for (size_t i = 0; i < pairs.size(); i++)
-	{
-		if (pairs[i] > groupsize)
-		{
-			groupsize = pairs[i];
-		}
-	}
-
-	// pair the elevations to the found groups
-	std::vector<double> topElevation(groupsize + 1, 9999);
-	for (size_t i = 0; i < faces.size(); i++)
-	{
-		TopoDS_Face floorFace = faces[i];
-		double xyz_z = 9999;
-
-		TopExp_Explorer expl;
-		for (expl.Init(floorFace, TopAbs_VERTEX); expl.More(); expl.Next())
-		{
-			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-			gp_Pnt evalPoint = BRep_Tool::Pnt(vertex);
-			if (evalPoint.Z() < xyz_z) { xyz_z = evalPoint.Z(); }
-		}
-		if (topElevation[pairs[i]] > xyz_z) { topElevation[pairs[i]] = xyz_z; }
-	}
-
-	// remove dublicates 
-	std::vector<double> filteredTopElevation;
-	for (size_t i = 0; i < topElevation.size(); i++)
-	{
-		bool dub = false;
-
-		if (!filteredTopElevation.size())
-		{
-			filteredTopElevation.emplace_back(topElevation[i]);
-		}
-		else
-		{
-			for (size_t j = 0; j < filteredTopElevation.size(); j++)
-			{
-				if (filteredTopElevation[j] < topElevation[i] + allowedDistance && filteredTopElevation[j] > topElevation[i] - allowedDistance)
+				if (i == j)
 				{
-					dub = true;
 					continue;
 				}
-			}
+				double distance = sqrt(pow(currentElevations[j] - currentElevations[i], 2));
 
-			if (!dub) { filteredTopElevation.emplace_back(topElevation[i]); }
-		}
-	}
-
-	// merge levels that are very close to each other
-	double maxDistance = 1.5;
-	int groupnr = 0;
-	std::vector<int> grouping(filteredTopElevation.size(), -1);
-	for (size_t i = 0; i < filteredTopElevation.size(); i++)
-	{
-		if (grouping[i] == -1)
-		{
-			grouping[i] = groupnr;
-			groupnr++;
-		}
-
-		for (size_t j = 0; j < filteredTopElevation.size(); j++)
-		{
-			if (j > i) { continue; }
-			double distance = sqrt(pow(filteredTopElevation[i] - filteredTopElevation[j], 2));
-			if (distance < maxDistance)
-			{
-				int base = grouping[j];
-				for (size_t k = 0; k < filteredTopElevation.size(); k++)
+				if (distance < smallestDiff)
 				{
-					if (grouping[k] == base) {
-						grouping[k] = grouping[i];
-					}
+					smallestDiff = distance;
 				}
 			}
 		}
-	}
 
-	// merge dublicates
-	std::vector<std::vector<double>> groupedFilteredTopElevation;
-	for (size_t i = 0; i < groupnr; i++)
-	{
-		std::vector<double> tempfloor;
-		for (size_t j = 0; j < filteredTopElevation.size(); j++)
+		if (smallestDiff > t)
 		{
-			if (grouping[j] == i)
+			finalElevationList = currentElevations;
+			break;
+		}
+		else if (iteration > maxIterations){
+			std::cout << "[Warning] Consolidation of storeys has failed" << std::endl;
+			break;
+		}
+
+		// collect area of the storeys
+		std::vector<double> areaList = floorProcessor::getFaceAreas(faces);
+		std::vector<double> storeyAreaList(group, -1);
+
+		for (size_t i = 0; i < group; i++)
+		{
+			for (size_t j = 0; j < pairing.size(); j++)
 			{
-				tempfloor.emplace_back(filteredTopElevation[j]);
+				if (pairing[j] == i)
+				{
+					if (storeyAreaList[i] == -1) { storeyAreaList[i] = areaList[j]; }
+					else { storeyAreaList[i] = storeyAreaList[i] + areaList[j]; }
+				}
 			}
 		}
+		iteration++;
+	}
 
-		if (tempfloor.size())
+	// TODO merge neighbours (not flat surfaces)
+
+	if (debug) {
+		for (size_t i = 0; i < faces.size(); i++)
 		{
-			groupedFilteredTopElevation.emplace_back(tempfloor);
+			std::cout << faces[i].Location().Transformation().TranslationPart().Z() << " - " << pairing[i] << std::endl;
 		}
 	}
 
-	return groupedFilteredTopElevation;
+	std::vector<double> computedElev;
+	//get matching height
+	int count = 0;
+	bool allfound = false;
+	for (size_t i = 0; i < z.size(); i++)
+	{
+		if (pairing[i] == count)
+		{
+			computedElev.emplace_back(z[i]);
+			count++;
+		}
+	}
+
+	if (debug)
+	{
+
+		for (size_t i = 0; i < computedElev.size(); i++)
+		{
+			std::cout << "computedElev: " << computedElev[i] << std::endl;
+		}
+	}
+	return computedElev;
+
 }
+
 
 void floorProcessor::printLevels(std::vector<double> levels) {
 	std::sort(levels.begin(), levels.end());
-
-	std::cout << "storey elevations: " << std::endl;
 	for (unsigned int i = 0; i < levels.size(); i++)
 	{
 		std::cout << levels[i] << std::endl;
-	}
-}
-
-void floorProcessor::printLevels(std::vector<std::vector<double>> levels) {
-	std::sort(levels.begin(), levels.end());
-
-	std::cout << "floor elevations: " << std::endl;
-	for (size_t i = 0; i < levels.size(); i++)
-	{
-		std::cout << "{";
-		for (size_t j = 0; j < levels[i].size(); j++)
-		{
-			std::cout << levels[i][j] << std::endl;
-		}
-		std::cout << "}" << std::endl;
 	}
 }
 
@@ -343,7 +239,7 @@ std::vector<double> floorProcessor::getStoreyElevations(helper* data)
 	return storeyElevation;
 }
 
-std::vector<std::vector<double>> floorProcessor::getFloorElevations(helper* data)
+std::vector<double> floorProcessor::getFloorElevations(helper* data)
 {
 	// get the floor faces and floor areas
 	std::vector<TopoDS_Face> floorFaces = floorProcessor::getSlabFaces(data);
@@ -370,65 +266,31 @@ std::vector<std::vector<double>> floorProcessor::getFloorElevations(helper* data
 		}
 	}
 
-	std::vector<int> pairing = floorProcessor::getPairing(filteredFaces);
-	std::vector<std::vector<double>> elevations = floorProcessor::getLevel(filteredFaces, pairing);
-
-	return elevations;
+	std::vector<double> Elevations = floorProcessor::computeElevations(filteredFaces);
+	std::cout << "test: " << Elevations.size() << std::endl;
+	return Elevations;
 }
 
-bool floorProcessor::compareElevations(std::vector<double> elevations, std::vector<std::vector<double>> floors)
+bool floorProcessor::compareElevations(std::vector<double> elevations, std::vector<double> floors)
 {
 	bool sameSize = false;
 	if (floors.size() == elevations.size())
 	{
 		std::cout << "[Info] Detected floors and storeys match" << std::endl;
-		sameSize = true;
+		return true;
 	}
 	else
 	{
-		std::cout << "[Warning] Detected floors and storeys mismatch!" << std::endl;
+		std::cout << "[Info] Detected floors and storeys mismatch!" << std::endl;
 		std::cout << "- " << floors.size() << " floors detected, " << elevations.size() << " storeys placed." << std::endl;
-		std::cout << "- This might be caused by complex floor and roof shapes, process is continued with the placed storeys" << std::endl;
 		return false;
 	}
 
 	for (size_t i = 0; i < elevations.size(); i++)
 	{
-		std::vector<double> rightElevation = floors[i];
+		double rightElevation = floors[i];
 		double leftElevation = elevations[i];
 
-		if (rightElevation.size() == 1)
-		{
-			if (rightElevation[0] != leftElevation) {
-				std::cout << "[Info] elevation mismatch" << std::endl;
-				std::cout << "- This might be caused by complex floor and roof shapes, process is continued with the placed storeys" << std::endl;
-				return false;
-			}
-		}
-		else
-		{
-			double hMin = 9999;
-			double hMax = -9999;
-			for (size_t j = 0; j < rightElevation.size(); j++)
-			{
-				if (rightElevation[j] < hMin)
-				{
-					hMin = rightElevation[j];
-				}
-
-				if (rightElevation[j] > hMax)
-				{
-					hMax = rightElevation[j];
-				}
-			}
-
-			if (leftElevation > hMax || leftElevation < hMin)
-			{
-				std::cout << "[Info] elevation mismatch" << std::endl;
-				std::cout << "- This might be caused by complex floor and roof shapes, process is continued with the placed storeys" << std::endl;
-				return false;
-			}
-		}
 	}
 	return true;
 }

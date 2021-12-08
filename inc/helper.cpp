@@ -20,6 +20,8 @@ helper::helper(std::string path) {
 
 		kernel_ = new IfcGeom::Kernel(file_);
 
+		hierarchy_ = new IfcHierarchyHelper<IfcSchema>;
+
 		helper::setUnits(file_);
 	}
 }
