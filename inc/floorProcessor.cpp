@@ -301,6 +301,32 @@ std::vector<std::vector<double>> floorProcessor::getLevel(std::vector<TopoDS_Fac
 	return groupedFilteredTopElevation;
 }
 
+void floorProcessor::printLevels(std::vector<double> levels) {
+	std::sort(levels.begin(), levels.end());
+
+	std::cout << "storey elevations: " << std::endl;
+	for (unsigned int i = 0; i < levels.size(); i++)
+	{
+		std::cout << levels[i] << std::endl;
+	}
+}
+
+void floorProcessor::printLevels(std::vector<std::vector<double>> levels) {
+	std::sort(levels.begin(), levels.end());
+
+	std::cout << "floor elevations: " << std::endl;
+	for (size_t i = 0; i < levels.size(); i++)
+	{
+		std::cout << "{";
+		for (size_t j = 0; j < levels[i].size(); j++)
+		{
+			std::cout << levels[i][j] << std::endl;
+		}
+		std::cout << "}" << std::endl;
+	}
+}
+
+
 std::vector<double> floorProcessor::getStoreyElevations(helper* data)
 {
 	IfcSchema::IfcBuildingStorey::list::ptr storeys = data->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
@@ -350,7 +376,7 @@ std::vector<std::vector<double>> floorProcessor::getFloorElevations(helper* data
 	return elevations;
 }
 
-void floorProcessor::compareElevations(std::vector<double> elevations, std::vector<std::vector<double>> floors)
+bool floorProcessor::compareElevations(std::vector<double> elevations, std::vector<std::vector<double>> floors)
 {
 	bool sameSize = false;
 	if (floors.size() == elevations.size())
@@ -363,72 +389,46 @@ void floorProcessor::compareElevations(std::vector<double> elevations, std::vect
 		std::cout << "[Warning] Detected floors and storeys mismatch!" << std::endl;
 		std::cout << "- " << floors.size() << " floors detected, " << elevations.size() << " storeys placed." << std::endl;
 		std::cout << "- This might be caused by complex floor and roof shapes, process is continued with the placed storeys" << std::endl;
+		return false;
 	}
 
-	if (sameSize)
+	for (size_t i = 0; i < elevations.size(); i++)
 	{
-		for (size_t i = 0; i < elevations.size(); i++)
+		std::vector<double> rightElevation = floors[i];
+		double leftElevation = elevations[i];
+
+		if (rightElevation.size() == 1)
 		{
-			std::vector<double> rightElevation = floors[i];
-			double leftElevation = elevations[i];
-
-			if (rightElevation.size() == 1)
-			{
-				if (rightElevation[0] != leftElevation) {
-					std::cout << "[Warning] elevation mismatch" << std::endl;
-					std::cout << "- This might be caused by complex floor and roof shapes, process is continued with the placed storeys" << std::endl;
-					break;
-				}
-			}
-			else
-			{
-				double hMin = 9999;
-				double hMax = -9999;
-				for (size_t j = 0; j < rightElevation.size(); j++)
-				{
-					if (rightElevation[j] < hMin)
-					{
-						hMin = rightElevation[j];
-					}
-
-					if (rightElevation[j] > hMax)
-					{
-						hMax = rightElevation[j];
-					}
-				}
-
-				if (leftElevation > hMax || leftElevation < hMin)
-				{
-					std::cout << "[Warning] elevation mismatch" << std::endl;
-					std::cout << "- This might be caused by complex floor and roof shapes, process is continued with the placed storeys" << std::endl;
-					break;
-				}
+			if (rightElevation[0] != leftElevation) {
+				std::cout << "[Info] elevation mismatch" << std::endl;
+				std::cout << "- This might be caused by complex floor and roof shapes, process is continued with the placed storeys" << std::endl;
+				return false;
 			}
 		}
-
-	}
-
-	// output floor levels
-	if (false)
-	{
-		std::sort(elevations.begin(), elevations.end());
-		std::sort(floors.begin(), floors.end());
-
-		std::cout << "storey elevations: " << std::endl;
-		for (unsigned int i = 0; i < elevations.size(); i++)
+		else
 		{
-			std::cout << elevations[i] << std::endl;
-		}
-
-		std::cout << "floor elevations: " << std::endl;
-		for (size_t i = 0; i < floors.size(); i++)
-		{
-			std::cout << "{";
-			for (size_t j = 0; j < floors[i].size(); j++)
+			double hMin = 9999;
+			double hMax = -9999;
+			for (size_t j = 0; j < rightElevation.size(); j++)
 			{
-				std::cout << floors[i][j] << std::endl;
+				if (rightElevation[j] < hMin)
+				{
+					hMin = rightElevation[j];
+				}
+
+				if (rightElevation[j] > hMax)
+				{
+					hMax = rightElevation[j];
+				}
 			}
-			std::cout << "}" << std::endl;
+
+			if (leftElevation > hMax || leftElevation < hMin)
+			{
+				std::cout << "[Info] elevation mismatch" << std::endl;
+				std::cout << "- This might be caused by complex floor and roof shapes, process is continued with the placed storeys" << std::endl;
+				return false;
+			}
 		}
 	}
+	return true;
 }

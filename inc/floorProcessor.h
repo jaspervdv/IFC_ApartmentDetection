@@ -1,4 +1,4 @@
-#define IfcSchema Ifc2x3
+#define IfcSchema Ifc4
 
 #include "helper.h"
 
@@ -29,13 +29,24 @@ private:
 	static std::vector<int> getPairing(std::vector<TopoDS_Face> faces);
 	static std::vector<std::vector<double>> getLevel(std::vector<TopoDS_Face> faces, std::vector<int> pairs);
 
+
+
 public:
 
 	static std::vector<double> getStoreyElevations(helper* data);
 	static std::vector<std::vector<double>> getFloorElevations(helper* data);
-	static void compareElevations(std::vector<double> elevations, std::vector<std::vector<double>> floors);
+	static bool compareElevations(std::vector<double> elevations, std::vector<std::vector<double>> floors);
+
+	// removes all the storey data from the file
+	static void cleanStoreys(helper* data);
+
+	// adds new storeys based on the inputted vector elevations
+	static void createStoreys(std::vector<double> floorStoreys);
 
 
+	// TODO make private
+	static void printLevels(std::vector<double> levels);
+	static void printLevels(std::vector<std::vector<double>> levels);
 };
 
 #endif // FLOORPROCESSOR_HELPER_H
