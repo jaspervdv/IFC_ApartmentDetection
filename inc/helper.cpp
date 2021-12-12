@@ -20,8 +20,6 @@ helper::helper(std::string path) {
 
 		kernel_ = new IfcGeom::Kernel(file_);
 
-		hierarchy_ = new IfcHierarchyHelper<IfcSchema>;
-
 		helper::setUnits(file_);
 	}
 }
@@ -151,4 +149,14 @@ void helper::setUnits(IfcParse::IfcFile *file) {
 	length_ = length;
 	area_ = area;
 	volume_ = volume;
+}
+
+IfcSchema::IfcOwnerHistory* helper::getHistory()
+{
+	IfcSchema::IfcOwnerHistory* ownerHistory;
+	IfcSchema::IfcOwnerHistory::list::ptr ownerHistories = file_->instances_by_type<IfcSchema::IfcOwnerHistory>();
+
+	if (ownerHistories.get()->size() != 1) { std::cout << "[Warning] multiple owners objects found!" << std::endl; }
+
+	return *ownerHistories.get()->begin();
 }

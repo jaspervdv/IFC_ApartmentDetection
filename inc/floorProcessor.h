@@ -1,5 +1,4 @@
 #define IfcSchema Ifc4
-
 #include "helper.h"
 
 #include <boost/log/core.hpp>
@@ -26,7 +25,10 @@ private:
 
 	// returns a vector of the areas of the faces
 	static std::vector<double> getFaceAreas(std::vector<TopoDS_Face> faces);
+
 	static std::vector<double> computeElevations(std::vector<TopoDS_Face> faces);
+
+
 
 public:
 
@@ -38,8 +40,9 @@ public:
 	static void cleanStoreys(helper* data);
 
 	// adds new storeys based on the inputted vector elevations
-	static void createStoreys(std::vector<double> floorStoreys);
+	static void createStoreys(helper* data, std::vector<double> floorStoreys);
 
+	static void sortObjects(helper* data);
 
 	// TODO make private
 	static void printLevels(std::vector<double> levels);

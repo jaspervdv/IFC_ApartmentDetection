@@ -23,7 +23,6 @@ private:
 
 	IfcParse::IfcFile* file_;
 	IfcGeom::Kernel* kernel_;
-	IfcHierarchyHelper<IfcSchema>* hierarchy_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
@@ -61,7 +60,17 @@ public:
 	// returns a pointer to the kernel
 	IfcGeom::Kernel* getKernel() const { return kernel_; }
 
-	IfcHierarchyHelper<IfcSchema>* getHierachyHelper() { return hierarchy_; }
+	// returns a pointer to the owner(s)
+	IfcSchema::IfcOwnerHistory* getHistory();
+
+	//TODO implement
+	// deletes all dependencies of an object and the object itself
+	static void wipeObject(helper* data, int id);
+
+	// deletes all dependencies of an object and the object itself
+	static void wipeObject(IfcHierarchyHelper<IfcSchema> data, int id);
+
+
 };
 
 #endif // HELPER_HELPER_H

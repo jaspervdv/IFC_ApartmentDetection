@@ -53,6 +53,8 @@ int main(int argc, char** argv) {
 		"D:/Documents/Uni/Thesis/sources/Models/exports/AC20-FZK-Haus.ifc"
 	};
 
+	bool findElevations = true;
+
 	std::vector<helper*> hFiles;
 
 	// initialize helper
@@ -75,7 +77,7 @@ int main(int argc, char** argv) {
 		std::vector<double> floorElevation = floorProcessor::getFloorElevations(hFiles[i]);
 
 		// create new storeys if needed
-		if (!floorProcessor::compareElevations(storeyElevation, floorElevation))
+		if (!floorProcessor::compareElevations(storeyElevation, floorElevation) && findElevations)
 		{
 			std::cout << "found storeys:" << std::endl;
 			floorProcessor::printLevels(storeyElevation);
@@ -83,23 +85,14 @@ int main(int argc, char** argv) {
 			std::cout << "computed storeys:" << std::endl;
 			floorProcessor::printLevels(floorElevation);
 
-			// TODO wipe storeys
-
-
-
-			// create new storeys			
-			for (size_t j = 0; j < floorElevation.size(); j++)
-			{
-				auto storeyObject = hFiles[i]->getHierachyHelper()->addBuildingStorey();
-				storeyObject->setElevation(floorElevation[j]);
-				storeyObject->setName("Floor");
-				storeyObject->setDescription("Automatically generated storey");
-			}
-
-
-			// TODO match objects to new storeys
+			// wipe storeys
+			floorProcessor::cleanStoreys(hFiles[i]);
+			// create new storeys
+			floorProcessor::createStoreys(hFiles[i], floorElevation);		
 		}
-		
+
+		// TODO match objects to new storeys
+		floorProcessor::sortObjects(hFiles[i]);
 	}
 	//TODO clash detection
 	
@@ -112,7 +105,7 @@ int main(int argc, char** argv) {
 	std::ofstream storageFile;
 	storageFile.open(exportPath);
 	std::cout << "exporting" << std::endl;
-	storageFile << *hFiles[0]->getHierachyHelper();
+	storageFile << *hFiles[0]->getSourceFile();
 	std::cout << "exported succesfully" << std::endl;
 	storageFile.close();
 

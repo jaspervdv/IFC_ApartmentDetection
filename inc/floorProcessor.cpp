@@ -89,7 +89,7 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 
 	// pair per "pure" elevation
 	for (size_t i = 0; i < faces.size(); i++) {
-		
+
 		if (pairing[i] == -1)
 		{
 			pairing[i] = group;
@@ -156,7 +156,7 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 			finalElevationList = currentElevations;
 			break;
 		}
-		else if (iteration > maxIterations){
+		else if (iteration > maxIterations) {
 			std::cout << "[Warning] Consolidation of storeys has failed" << std::endl;
 			break;
 		}
@@ -294,3 +294,103 @@ bool floorProcessor::compareElevations(std::vector<double> elevations, std::vect
 	}
 	return true;
 }
+
+void floorProcessor::cleanStoreys(helper* data)
+{
+	// remove the storey object
+	IfcSchema::IfcBuildingStorey::list::ptr oldStoreys = data->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
+
+	for (IfcSchema::IfcBuildingStorey::list::it it = oldStoreys->begin(); it != oldStoreys->end(); ++it)
+	{
+		IfcSchema::IfcBuildingStorey* storey = *it;
+		data->getSourceFile()->removeEntity(storey);
+	}
+
+	// remove the storey container
+	IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = data->getSourceFile()->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
+
+	for (IfcSchema::IfcRelContainedInSpatialStructure::list::it it = containers->begin(); it != containers->end(); ++it)
+	{
+		IfcSchema::IfcRelContainedInSpatialStructure* container = *it;
+		data->getSourceFile()->removeEntity(container);
+	}
+
+}
+
+void floorProcessor::createStoreys(helper* data, std::vector<double> floorStoreys)
+{
+	IfcSchema::IfcOwnerHistory* ownerHistory = data->getHistory();
+
+	// find original owner history
+	IfcSchema::IfcBuilding* building;
+	IfcSchema::IfcBuilding::list::ptr buildings = data->getSourceFile()->instances_by_type<IfcSchema::IfcBuilding>();
+	
+	if (buildings.get()->size() != 1)
+	{
+		std::cout << "[Error] multiple building objects found!" << std::endl;
+		return;
+	}
+
+	building = *buildings.get()->begin();
+
+	auto targetFile = data->getSourceFile();
+	IfcHierarchyHelper<IfcSchema> hierarchyHelper;
+
+	for (size_t i = 0; i < floorStoreys.size(); i++)
+	{
+		// create storey objects
+		auto storey = hierarchyHelper.addBuildingStorey(building, ownerHistory);
+		storey->setElevation(floorStoreys[i]);
+		storey->setName("Floor");
+		storey->setDescription("Automatically generated floor");
+
+		IfcSchema::IfcProduct::list::ptr parts(new IfcSchema::IfcProduct::list);
+
+		// make container object
+		IfcSchema::IfcRelContainedInSpatialStructure* container = new IfcSchema::IfcRelContainedInSpatialStructure(
+			IfcParse::IfcGlobalId(),		// GlobalId
+			0,								// OwnerHistory
+			boost::none,					// Name
+			boost::none,					// Description
+			parts,							// Related Elements
+			storey							// Related structure
+		);
+
+		hierarchyHelper.addEntity(container);
+	}
+
+	// add storey objects to the project
+	for (auto it = hierarchyHelper.begin(); it != hierarchyHelper.end(); ++it)
+	{
+		auto hierarchyElement = *it;
+		auto hierarchyDataElement = hierarchyElement.second;
+		auto objectName = hierarchyDataElement->declaration().name();
+
+		// remove potential dublications made by the helper
+		// TODO remove all dependencies of building and owners as well
+		if (objectName == "IfcBuilding" || objectName == "IfcOwnerHistory") { continue; }
+
+		targetFile->addEntity(hierarchyDataElement);
+	}
+
+}
+
+
+
+void floorProcessor::sortObjects(helper* data)
+{
+	IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = data->getSourceFile()->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
+
+	std::map<double, IfcSchema::IfcRelContainedInSpatialStructure*> pairedContainers;
+
+	for (auto it= containers->begin(); it != containers->end(); ++it)
+	{
+		IfcSchema::IfcRelContainedInSpatialStructure* container = *it;
+
+		std::cout << container->RelatingStructure()->data().getArgument(9)->toString() << std::endl;
+	}
+
+	IfcSchema::IfcObject::list::ptr objects = data->getSourceFile()->instances_by_type<IfcSchema::IfcObject>();
+
+}
+
