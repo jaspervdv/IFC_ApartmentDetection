@@ -5,6 +5,8 @@ std::vector<TopoDS_Face> floorProcessor::getSlabFaces(helper* data) {
 	std::vector<TopoDS_Face> floorFaces;
 	IfcSchema::IfcSlab::list::ptr slabs = data->getSourceFile()->instances_by_type<IfcSchema::IfcSlab>();
 
+	auto kernel = data->getKernel();
+
 	for (IfcSchema::IfcSlab::list::it it = slabs->begin(); it != slabs->end(); ++it) {
 		const IfcSchema::IfcSlab* slab = *it;
 
@@ -13,7 +15,7 @@ std::vector<TopoDS_Face> floorProcessor::getSlabFaces(helper* data) {
 
 		//get the global coordinate of the local origin
 		gp_Trsf trsf;
-		data->getKernel()->convert_placement(slab->ObjectPlacement(), trsf);
+		kernel->convert_placement(slab->ObjectPlacement(), trsf);
 
 		for (auto et = slabProduct.get()->begin(); et != slabProduct.get()->end(); et++) {
 			const IfcSchema::IfcRepresentation* slabRepresentation = *et;
@@ -28,7 +30,7 @@ std::vector<TopoDS_Face> floorProcessor::getSlabFaces(helper* data) {
 				{
 					IfcSchema::IfcRepresentationItem* slabItem = *st;
 
-					auto ob = data->getKernel()->convert(slabItem);
+					auto ob = kernel->convert(slabItem);
 
 					// move to OpenCASCADE
 					const TopoDS_Shape rShape = ob[0].Shape();
@@ -350,12 +352,11 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 		IfcSchema::IfcRelContainedInSpatialStructure* container = new IfcSchema::IfcRelContainedInSpatialStructure(
 			IfcParse::IfcGlobalId(),		// GlobalId
 			0,								// OwnerHistory
-			boost::none,					// Name
+			std::string(""),				// Name
 			boost::none,					// Description
 			parts,							// Related Elements
 			storey							// Related structure
 		);
-
 		hierarchyHelper.addEntity(container);
 	}
 
@@ -379,18 +380,100 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 
 void floorProcessor::sortObjects(helper* data)
 {
-	IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = data->getSourceFile()->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
+	IfcParse::IfcFile*  sourcefile = data->getSourceFile();
+	auto kernel = data->getKernel();
 
-	std::map<double, IfcSchema::IfcRelContainedInSpatialStructure*> pairedContainers;
+	// make a vector with the height, spatial structure and a temp product  list
+	IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = sourcefile->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
+
+	std::vector<std::tuple<double, IfcSchema::IfcRelContainedInSpatialStructure*, IfcSchema::IfcProduct::list::ptr>> pairedContainers;
 
 	for (auto it= containers->begin(); it != containers->end(); ++it)
 	{
-		IfcSchema::IfcRelContainedInSpatialStructure* container = *it;
-
-		std::cout << container->RelatingStructure()->data().getArgument(9)->toString() << std::endl;
+		IfcSchema::IfcRelContainedInSpatialStructure* structure = *it;
+		IfcSchema::IfcProduct::list::ptr container(new IfcSchema::IfcProduct::list);
+		
+		pairedContainers.emplace_back(
+			std::make_tuple(std::stod(structure->RelatingStructure()->data().getArgument(9)->toString()),		// height
+			structure,																							// spatial structure
+			container)																							// ifcproduct list
+			);
 	}
 
-	IfcSchema::IfcObject::list::ptr objects = data->getSourceFile()->instances_by_type<IfcSchema::IfcObject>();
+	std::sort(pairedContainers.begin(), pairedContainers.end());
+
+	// get the elevation of all product in the model
+	IfcSchema::IfcProduct::list::ptr products = sourcefile->instances_by_type<IfcSchema::IfcProduct>();
+
+	for (auto it = products->begin(); it != products->end(); ++it)
+	{
+		IfcSchema::IfcProduct* product = *it;
+
+		if (!product->hasRepresentation()) { continue; }
+		if (product->data().type()->name() == "IfcSite") { continue; }
+
+		std::cout << product->data().toString() << std::endl;
+
+		auto representations = product->Representation()->Representations();
+
+		gp_Trsf trsf;
+		kernel->convert_placement(product->ObjectPlacement(), trsf);
+
+		double height;
+
+		for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
+			const IfcSchema::IfcRepresentation* representation = *et;
+
+			// select the bounding box of the objects
+			if (representation->data().getArgument(2)->toString() == "'BoundingBox'") {
+
+				auto items = representation->Items();
+
+				if (items.get()->size() != 1)
+				{
+					std::cout << "[Warning] more than one item has been found at object with id: " << product->data().id() << std::endl;
+				}
+
+				IfcSchema::IfcRepresentationItem* item = *items.get()->begin();
+				std::string x = item->get("Corner")->toString();
+				x.erase(0, 1);
+
+				IfcUtil::IfcBaseClass* point = sourcefile->instance_by_id(std::stoi(x));
+
+				// get the height of the object
+				height = std::stod(point->data().getArgument(0)[0][2]->toString()) + trsf.TranslationPart().Z();
+				std::cout << "object height: " << height << std::endl;
+			}
+			else if (representation->data().getArgument(2)->toString() == "'Annotation2D'") {
+				// TODO deal with this 
+			}
+		}
+		
+		for (size_t i = 0; i < pairedContainers.size(); i++)
+		{
+			auto currentTuple = pairedContainers[i];
+
+			double distance = std::get<0>(currentTuple) - height;
+
+			if (distance == 0)
+			{
+				std::get<2>(currentTuple)->push(product);
+			}
+		}
+
+		std::cout << std::endl;
+
+		//kernel->convert(product);
+
+
+	}
+
+	for (size_t i = 0; i < pairedContainers.size(); i++)
+	{
+		auto currentTuple = pairedContainers[i];
+
+		std::get<1>(currentTuple)->setRelatedElements(std::get<2>(currentTuple));
+	}
 
 }
 

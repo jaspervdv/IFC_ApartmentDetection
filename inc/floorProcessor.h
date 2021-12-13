@@ -13,6 +13,8 @@
 #include <ifcgeom/IfcGeomRepresentation.h>
 #include <ifcgeom_schema_agnostic/kernel.h>
 
+#include <tuple>
+
 #ifndef FLOORPROCESSOR_HELPER_H
 #define FLOORPROCESSOR_HELPER_H
 
