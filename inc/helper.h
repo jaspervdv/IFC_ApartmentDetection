@@ -70,6 +70,7 @@ public:
 	// deletes all dependencies of an object and the object itself
 	static void wipeObject(IfcHierarchyHelper<IfcSchema> data, int id);
 
+	void writeToFile(std::string path);
 
 };
 

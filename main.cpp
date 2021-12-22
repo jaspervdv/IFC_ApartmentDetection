@@ -30,6 +30,7 @@
 #include <ifcgeom/IfcGeomRepresentation.h>
 #include <ifcgeom_schema_agnostic/kernel.h>
 
+
 #if USE_VLD
 #include <vld.h>
 #endif
@@ -37,21 +38,32 @@
 typedef IfcParse::IfcGlobalId guid;
 
 int main(int argc, char** argv) {
+
 	Logger::SetOutput(&std::cout, &std::cout);
 
-	std::string sourcePath = "D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc";
-	std::string exportPath = "D:/Documents/Uni/Thesis/sources/Models/exports/AC20-FZK-Haus.ifc";
+	std::cout << "[INFO] This build is made for " << IfcSchema::get_schema().name() << std::endl;
 
+	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
-		"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
-		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
+		"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
+		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc"//,
 		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
 		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
 	};
 
-	std::vector<std::string> exportPathArray = {
-		"D:/Documents/Uni/Thesis/sources/Models/exports/AC20-FZK-Haus.ifc"
-	};
+	// TODO replace with file save prompt
+	// make export path
+	std::vector<std::string> exportPathArray;
+	for (size_t i = 0; i < sourcePathArray.size(); i++)
+	{
+		std::string exportPath;
+		std::vector<std::string> segments;
+		boost::split(segments, sourcePathArray[i], boost::is_any_of("/"));
+
+		for (size_t i = 0; i < segments.size()-1; i++) { exportPath += segments[i] + "/"; }
+		exportPath += "exports/Exported_" + segments[segments.size() - 1];
+		exportPathArray.emplace_back(exportPath);
+	}
 
 	bool findElevations = true;
 
@@ -74,40 +86,33 @@ int main(int argc, char** argv) {
 	{
 		std::vector<double> storeyElevation = floorProcessor::getStoreyElevations(hFiles[i]);
 
-		std::vector<double> floorElevation = floorProcessor::getFloorElevations(hFiles[i]);
-
-		// create new storeys if needed
-		if (!floorProcessor::compareElevations(storeyElevation, floorElevation) && findElevations)
+		if (findElevations)
 		{
-			std::cout << "found storeys:" << std::endl;
-			floorProcessor::printLevels(storeyElevation);
+			std::vector<double> floorElevation = floorProcessor::getFloorElevations(hFiles[i]);
 
-			std::cout << "computed storeys:" << std::endl;
-			floorProcessor::printLevels(floorElevation);
+			// create new storeys if needed
+			if (!floorProcessor::compareElevations(storeyElevation, floorElevation))
+			{
+				std::cout << "found storeys:" << std::endl;
+				floorProcessor::printLevels(storeyElevation);
 
-			// wipe storeys
-			floorProcessor::cleanStoreys(hFiles[i]);
-			// create new storeys
-			floorProcessor::createStoreys(hFiles[i], floorElevation);		
+				std::cout << "computed storeys:" << std::endl;
+				floorProcessor::printLevels(floorElevation);
+
+				// wipe storeys
+				floorProcessor::cleanStoreys(hFiles[i]);
+				// create new storeys
+				floorProcessor::createStoreys(hFiles[i], floorElevation);
+			}
 		}
 
-		// TODO match objects to new storeys
+		// match objects to new storeys
 		floorProcessor::sortObjects(hFiles[i]);
 	}
 	//TODO clash detection
-	
-	// create working basefile
-	IfcHierarchyHelper<IfcSchema> workingFile;
-	workingFile.header().file_name().name("test.ifc");
 
 	// write to file
-	
-	std::ofstream storageFile;
-	storageFile.open(exportPath);
-	std::cout << "exporting" << std::endl;
-	storageFile << *hFiles[0]->getSourceFile();
-	std::cout << "exported succesfully" << std::endl;
-	storageFile.close();
+	hFiles[0]->writeToFile(exportPathArray[0]);
 
 	std::cout << "last line executed" << std::endl;
 	

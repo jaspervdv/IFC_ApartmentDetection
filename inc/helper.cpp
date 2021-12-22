@@ -160,3 +160,13 @@ IfcSchema::IfcOwnerHistory* helper::getHistory()
 
 	return *ownerHistories.get()->begin();
 }
+
+void helper::writeToFile(std::string path)
+{
+	std::ofstream storageFile;
+	storageFile.open(path);
+	std::cout << "exporting" << std::endl;
+	storageFile << *file_;
+	std::cout << "exported succesfully" << std::endl;
+	storageFile.close();
+}

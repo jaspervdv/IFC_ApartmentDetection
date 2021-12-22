@@ -21,7 +21,7 @@
 class floorProcessor {
 
 private:
-
+	
 	// returns a vector filled with the top faces of the present floorslab objects
 	static std::vector<TopoDS_Face> getSlabFaces(helper* data);
 
@@ -29,8 +29,6 @@ private:
 	static std::vector<double> getFaceAreas(std::vector<TopoDS_Face> faces);
 
 	static std::vector<double> computeElevations(std::vector<TopoDS_Face> faces);
-
-
 
 public:
 
