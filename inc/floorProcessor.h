@@ -32,9 +32,21 @@ private:
 
 	struct FloorStruct
 	{
+		// stored data		
 		bool isFlat;
+		bool isSmall;
 		TopoDS_Face face;
-		int group;
+		double area;
+		double elevation;
+		int group = -1;
+
+		// check if data is stored
+		bool hasFlatness = false;
+		bool hasSmallness = false;
+		bool hasFace = false;
+		bool hasArea = false;
+		bool hasElevation = false;
+		bool hasGroup = false;
 	};
 	
 	// returns a vector filled with the top faces of the present floorslab objects

@@ -80,42 +80,61 @@ std::vector<double> floorProcessor::getFaceAreas(std::vector<TopoDS_Face> faces)
 }
 
 std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> faces) {
+	
 	bool debug = true;
+
+	// make floor struct
+	std::vector<double> faceAreas = floorProcessor::getFaceAreas(faces);
+
+	std::vector<FloorStruct> floorList;
+	for (size_t i = 0; i < faces.size(); i++)
+	{ 
+		floorProcessor::FloorStruct floorobject;
+
+		floorobject.face = faces[i];
+		floorobject.hasFace = true;
+
+		floorobject.area = faceAreas[i];
+		floorobject.hasArea = true;
+
+		floorList.emplace_back(floorobject);
+	}
+
 
 	// TODO remove extremely small area slabs
 
 	// grouping floor faces by connection
-	std::vector<int> pairing(faces.size(), -1);
-	std::vector<double> z;
 	int group = 0;
 
 	// pair per "pure" elevation
-	for (size_t i = 0; i < faces.size(); i++) {
+	for (size_t i = 0; i < floorList.size(); i++) {
 
-		if (pairing[i] == -1)
+		if (floorList[i].group == -1)
 		{
-			pairing[i] = group;
+			floorList[i].group = group;
+			floorList[i].hasGroup = true;
 			group++;
 		}
 
-		TopoDS_Face rfloorFace = faces[i];
+		TopoDS_Face rfloorFace = floorList[i].face;
 		double height = rfloorFace.Location().Transformation().TranslationPart().Z();
-		z.emplace_back(height);
+		floorList[i].elevation = height;
+		floorList[i].hasElevation = true;
 
-		for (size_t j = 0; j < faces.size(); j++)
+		for (size_t j = 0; j < floorList.size(); j++)
 		{
 			if (j <= i) { continue; }
-			if (faces[j].Location().Transformation().TranslationPart().Z() == height)
+			if (floorList[j].face.Location().Transformation().TranslationPart().Z() == height)
 			{
-				pairing[j] = pairing[i];
+				floorList[j].group = floorList[i].group;
 			}
 		}
 	}
 
 	// merge neighbours (not flat surfaces)
-	for (size_t i = 0; i < faces.size(); i++) {
+	for (size_t i = 0; i < floorList.size(); i++) {
 		
-		TopoDS_Face face1 = faces[i];		
+		TopoDS_Face face1 = floorList[i].face;
 		TopExp_Explorer expl;
 		std::vector<DistancePair> pairedDistance;
 		std::vector<gp_Pnt> pointList;
@@ -144,7 +163,7 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 
 		for (size_t j = 0; j < faces.size(); j++)
 		{
-			if (pairing[i] == pairing[j]) { continue; }
+			if (floorList[i].group == floorList[j].group) { continue; }
 
 			bool neighbouring = false;
 
@@ -167,11 +186,11 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 						std::cout << computedDistance << " -- " << referenceDistance << std::endl;
 						neighbouring = true;
 
-						for (size_t l = 0; l < pairing.size(); l++)
+						for (size_t l = 0; l < floorList.size(); l++)
 						{
-							if (pairing[l] == pairing[j])
+							if (floorList[l].group == floorList[j].group)
 							{
-								pairing[l] = pairing[i];
+								floorList[l].group = floorList[i].group;
 							}
 						}
 					}
@@ -184,7 +203,7 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 	if (debug) {
 		for (size_t i = 0; i < faces.size(); i++)
 		{
-			std::cout << faces[i].Location().Transformation().TranslationPart().Z() << " - " << pairing[i] << std::endl;
+			std::cout << floorList[i].face.Location().Transformation().TranslationPart().Z() << " - " << floorList[i].group << std::endl;
 		}
 	}
 
@@ -201,21 +220,27 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 	}
 
 
-
 	//get matching height list
-	double maxCount = *std::max_element(pairing.begin(), pairing.end());
+	int maxCount = -1;
+	for (size_t i = 0; i < floorList.size(); i++)
+	{
+		if (floorList[i].group > maxCount) { maxCount = floorList[i].group; }
+	}
+	if (maxCount == -1) { std::cout << "[Error] No floor leves could be computed" << std::endl; }
+
+	//double maxCount = *std::max_element(pairing.begin(), pairing.end());
 	std::vector<double> computedElev;
 	int count = 0;
 	bool allfound = false;
 
 	while (!allfound)
 	{
-		for (size_t i = 0; i < z.size(); i++)
+		for (size_t i = 0; i < floorList.size(); i++)
 		{
 			//std::cout << i << " = " << count << std::endl;
-			if (pairing[i] == count)
+			if (floorList[i].group == count)
 			{
-				computedElev.emplace_back(z[i]);
+				computedElev.emplace_back(floorList[i].elevation);
 				break;
 			}
 			
