@@ -21,6 +21,21 @@
 class floorProcessor {
 
 private:
+
+	/// collects an edge by begin and enpoint and the distance between the two
+	struct DistancePair
+	{
+		gp_Pnt p1;
+		gp_Pnt p2;
+		double distance;
+	};
+
+	struct FloorStruct
+	{
+		bool isFlat;
+		TopoDS_Face face;
+		int group;
+	};
 	
 	// returns a vector filled with the top faces of the present floorslab objects
 	static std::vector<TopoDS_Face> getSlabFaces(helper* data);

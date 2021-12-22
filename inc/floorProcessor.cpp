@@ -82,6 +82,8 @@ std::vector<double> floorProcessor::getFaceAreas(std::vector<TopoDS_Face> faces)
 std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> faces) {
 	bool debug = true;
 
+	// TODO remove extremely small area slabs
+
 	// grouping floor faces by connection
 	std::vector<int> pairing(faces.size(), -1);
 	std::vector<double> z;
@@ -110,86 +112,12 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 		}
 	}
 
-	bool consolidated = false;
-	int iteration = 0;
-	std::vector<double> finalElevationList;
-
-	double t = 1;
-	int maxIterations = 1;
-
-	while (!consolidated)
-	{
-		// find smallest difference between "pure" elevations
-		std::vector<double> currentElevations;
-		for (size_t i = 0; i < group; i++)
-		{
-			for (size_t j = 0; j < pairing.size(); j++)
-			{
-				if (pairing[j] == i) {
-					currentElevations.emplace_back(z[j]);
-					break;
-				}
-			}
-		}
-
-		double smallestDiff = 9000;
-		std::tuple<int, int> smallDistanceIndex;
-		for (size_t i = 0; i < currentElevations.size(); i++)
-		{
-			for (size_t j = i; j < currentElevations.size(); j++)
-			{
-				if (i == j)
-				{
-					continue;
-				}
-				double distance = sqrt(pow(currentElevations[j] - currentElevations[i], 2));
-
-				if (distance < smallestDiff)
-				{
-					smallestDiff = distance;
-				}
-			}
-		}
-
-		//std::cout << smallestDiff << std::endl;
-
-		if (smallestDiff > t)
-		{
-			finalElevationList = currentElevations;
-			break;
-		}
-		else if (iteration > maxIterations) {
-			std::cout << "[Warning] Consolidation of storeys has failed" << std::endl;
-			break;
-		}
-
-		// collect area of the storeys
-		std::vector<double> areaList = floorProcessor::getFaceAreas(faces);
-		std::vector<double> storeyAreaList(group, -1);
-
-		for (size_t i = 0; i < group; i++)
-		{
-			for (size_t j = 0; j < pairing.size(); j++)
-			{
-				if (pairing[j] == i)
-				{
-					if (storeyAreaList[i] == -1) { storeyAreaList[i] = areaList[j]; }
-					else { storeyAreaList[i] = storeyAreaList[i] + areaList[j]; }
-				}
-			}
-		}
-
-		//TODO merge small differences?
-
-		iteration++;
-	}
-
-	// TODO merge neighbours (not flat surfaces)
+	// merge neighbours (not flat surfaces)
 	for (size_t i = 0; i < faces.size(); i++) {
 		
 		TopoDS_Face face1 = faces[i];		
 		TopExp_Explorer expl;
-		std::vector<std::tuple<gp_Pnt, gp_Pnt, double>> pairedDistance; // contains 2 points and the distance between those two points
+		std::vector<DistancePair> pairedDistance;
 		std::vector<gp_Pnt> pointList;
 
 		// get all vertex from a face
@@ -206,8 +134,12 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 			gp_Pnt p1 = pointList[j];
 			gp_Pnt p2 = pointList[j + 1];
 
-			double distance = p1.Distance(p2);
-			pairedDistance.emplace_back(std::make_tuple(p1, p2, distance));		
+			floorProcessor::DistancePair pair;
+			pair.p1 = p1;
+			pair.p2 = p2;
+			pair.distance = p1.Distance(p2);;
+
+			pairedDistance.emplace_back(pair);
 		}
 
 		for (size_t j = 0; j < faces.size(); j++)
@@ -227,15 +159,13 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 				for (size_t k = 0; k < pairedDistance.size(); k++)
 				{
 					auto pair = pairedDistance[k];
-					auto referenceDistance = std::get<2>(pair);
+					auto referenceDistance = pair.distance;
 
-					double computedDistance = p3.Distance(std::get<0>(pair)) + p3.Distance(std::get<1>(pair));
+					double computedDistance = p3.Distance(pair.p1) + p3.Distance(pair.p2);
 					if (computedDistance + 0.05 > referenceDistance && computedDistance - 0.05 < referenceDistance) {
 
-						//std::cout << computedDistance << " -- " << referenceDistance << std::endl;
+						std::cout << computedDistance << " -- " << referenceDistance << std::endl;
 						neighbouring = true;
-
-						//pairing[j] = pairing[i];
 
 						for (size_t l = 0; l < pairing.size(); l++)
 						{
@@ -258,7 +188,21 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 		}
 	}
 
-	//get matching height
+	int maxIterations = 1000;
+
+	for (size_t i = 0; i < maxIterations; i++)
+	{
+
+
+
+		// TODO establish if floor group is flat
+		// TODO if one is not flat merge to flat floor
+		// TODO if both flat or both not flat merge to largest area
+	}
+
+
+
+	//get matching height list
 	double maxCount = *std::max_element(pairing.begin(), pairing.end());
 	std::vector<double> computedElev;
 	int count = 0;
@@ -279,8 +223,6 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 		count++;
 		if (count > maxCount) {	break; }
 	}
-
-	//std::cout << "size: " << computedElev.size() << std::endl;
 
 	if (debug)
 	{
