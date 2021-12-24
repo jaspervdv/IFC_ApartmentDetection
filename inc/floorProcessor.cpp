@@ -89,176 +89,233 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 	std::vector<FloorStruct> floorList;
 	for (size_t i = 0; i < faces.size(); i++)
 	{ 
-		floorProcessor::FloorStruct floorobject;
-
-		floorobject.face = faces[i];
-		floorobject.hasFace = true;
-
-		floorobject.area = faceAreas[i];
-		floorobject.hasArea = true;
-
+		// TODO remove extremely small area slabs
+		floorProcessor::FloorStruct floorobject(faces[i], faceAreas[i]);
 		floorList.emplace_back(floorobject);
 	}
 
+	std::vector<FloorGroupStruct> floorGroups;
 
-	// TODO remove extremely small area slabs
 
-	// grouping floor faces by connection
-	int group = 0;
 
 	// pair per "pure" elevation
 	for (size_t i = 0; i < floorList.size(); i++) {
 
-		if (floorList[i].group == -1)
+		floorProcessor::FloorGroupStruct floorGroup;
+
+		if (!floorList[i].hasGroup)
 		{
-			floorList[i].group = group;
+			floorGroup.addFloor(&floorList[i]);
 			floorList[i].hasGroup = true;
-			group++;
-		}
 
-		TopoDS_Face rfloorFace = floorList[i].face;
-		double height = rfloorFace.Location().Transformation().TranslationPart().Z();
-		floorList[i].elevation = height;
-		floorList[i].hasElevation = true;
+			double height = floorList[i].elevation_;
 
-		for (size_t j = 0; j < floorList.size(); j++)
-		{
-			if (j <= i) { continue; }
-			if (floorList[j].face.Location().Transformation().TranslationPart().Z() == height)
+			for (size_t j = 0; j < floorList.size(); j++)
 			{
-				floorList[j].group = floorList[i].group;
+				if (floorList[j].hasGroup) { continue; }
+				double otherHeight = floorList[j].elevation_;
+
+				if (otherHeight + 0.000001 > height && otherHeight - 0.000001 < height)
+				{
+					floorGroup.addFloor(&floorList[j]);
+					floorList[j].hasGroup = true;
+				}
 			}
+
 		}
+		if (floorGroup.floors_.size() > 0) { floorGroups.emplace_back(floorGroup); }
 	}
 
-	// merge neighbours (not flat surfaces)
-	for (size_t i = 0; i < floorList.size(); i++) {
-		
-		TopoDS_Face face1 = floorList[i].face;
-		TopExp_Explorer expl;
-		std::vector<DistancePair> pairedDistance;
-		std::vector<gp_Pnt> pointList;
+	// find neighbours
+	for (size_t i = 0; i < floorGroups.size(); i++)
+	{
+		auto currentGroup = &floorGroups[i];
 
-		// get all vertex from a face
-		for (expl.Init(face1, TopAbs_VERTEX); expl.More(); expl.Next())
+		// get a face from a group
+		for (size_t j = 0; j < currentGroup->floors_.size(); j++)
 		{
-			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-			pointList.emplace_back(BRep_Tool::Pnt(vertex));
-		}
-
-		// pair the vertex to create edges and compute distances
-		int maxidx = pointList.size();
-		for (size_t j = 0; j < maxidx; j += 2)
-		{
-			gp_Pnt p1 = pointList[j];
-			gp_Pnt p2 = pointList[j + 1];
-
-			floorProcessor::DistancePair pair;
-			pair.p1 = p1;
-			pair.p2 = p2;
-			pair.distance = p1.Distance(p2);;
-
-			pairedDistance.emplace_back(pair);
-		}
-
-		for (size_t j = 0; j < faces.size(); j++)
-		{
-			if (floorList[i].group == floorList[j].group) { continue; }
-
-			bool neighbouring = false;
-
-			TopoDS_Face face2 = faces[j];
+			TopoDS_Face face1 = currentGroup->floors_[j]->face_;
+			TopExp_Explorer expl;
+			std::vector<DistancePair> pairedDistance;
+			std::vector<gp_Pnt> pointList;
 
 			// get all vertex from a face
-			for (expl.Init(face2, TopAbs_VERTEX); expl.More(); expl.Next())
+			for (expl.Init(face1, TopAbs_VERTEX); expl.More(); expl.Next())
 			{
 				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-				gp_Pnt p3 = BRep_Tool::Pnt(vertex);
+				pointList.emplace_back(BRep_Tool::Pnt(vertex));
+			}
 
-				for (size_t k = 0; k < pairedDistance.size(); k++)
+			// pair the vertex to create edges and compute distances
+			int maxidx = pointList.size();
+			for (size_t j = 0; j < maxidx; j += 2)
+			{
+				gp_Pnt p1 = pointList[j];
+				gp_Pnt p2 = pointList[j + 1];
+
+				floorProcessor::DistancePair pair;
+				pair.p1 = p1;
+				pair.p2 = p2;
+				pair.distance = p1.Distance(p2);;
+
+				pairedDistance.emplace_back(pair);
+			}
+
+			for (size_t k = i + 1; k < floorGroups.size(); k++)
+			{
+				bool found = false;
+				auto matchingGroup = &floorGroups[k];
+
+				// get a face from a group to match
+				for (size_t l = 0; l < matchingGroup->floors_.size(); l++)
 				{
-					auto pair = pairedDistance[k];
-					auto referenceDistance = pair.distance;
 
-					double computedDistance = p3.Distance(pair.p1) + p3.Distance(pair.p2);
-					if (computedDistance + 0.05 > referenceDistance && computedDistance - 0.05 < referenceDistance) {
+					TopoDS_Face face2 = matchingGroup->floors_[l]->face_;
 
-						std::cout << computedDistance << " -- " << referenceDistance << std::endl;
-						neighbouring = true;
+					for (expl.Init(face2, TopAbs_VERTEX); expl.More(); expl.Next())
+					{
+						TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+						gp_Pnt p3 = BRep_Tool::Pnt(vertex);
 
-						for (size_t l = 0; l < floorList.size(); l++)
+						for (size_t m = 0; m < pairedDistance.size(); m++)
 						{
-							if (floorList[l].group == floorList[j].group)
-							{
-								floorList[l].group = floorList[i].group;
+							auto& pair = pairedDistance[m];
+							auto referenceDistance = pair.distance;
+
+							double computedDistance = p3.Distance(pair.p1) + p3.Distance(pair.p2);
+							if (computedDistance + 0.05 > referenceDistance && computedDistance - 0.05 < referenceDistance) {
+								if (matchingGroup->mergeNum_ == -1) { 
+									matchingGroup->merger_ = currentGroup; 
+									matchingGroup->mergeNum_ = 1;
+								}
+								else {
+									for (size_t n = 0; n < floorGroups.size(); n++)
+									{
+										if (floorGroups[n].merger_ == matchingGroup)
+										{
+											floorGroups[n].merger_ = currentGroup;
+										}
+										matchingGroup->merger_ = currentGroup;
+									}
+								}
 							}
 						}
 					}
-					if (neighbouring) { break; }
 				}
 			}
 		}
 	}
 
-	if (debug) {
-		for (size_t i = 0; i < faces.size(); i++)
+	// merge the groups
+	updateFloorGroup(&floorGroups);
+
+	// find overlapping buffers
+	for (size_t i = 0; i < floorGroups.size(); i++)
+	{
+		auto currentGroup = &floorGroups[i];
+		for (size_t j = i + 1; j < floorGroups.size(); j++)
 		{
-			std::cout << floorList[i].face.Location().Transformation().TranslationPart().Z() << " - " << floorList[i].group << std::endl;
-		}
-	}
+			auto matchingGroup = &floorGroups[j];
 
-	int maxIterations = 1000;
-
-	for (size_t i = 0; i < maxIterations; i++)
-	{
-
-
-
-		// TODO establish if floor group is flat
-		// TODO if one is not flat merge to flat floor
-		// TODO if both flat or both not flat merge to largest area
-	}
-
-
-	//get matching height list
-	int maxCount = -1;
-	for (size_t i = 0; i < floorList.size(); i++)
-	{
-		if (floorList[i].group > maxCount) { maxCount = floorList[i].group; }
-	}
-	if (maxCount == -1) { std::cout << "[Error] No floor leves could be computed" << std::endl; }
-
-	//double maxCount = *std::max_element(pairing.begin(), pairing.end());
-	std::vector<double> computedElev;
-	int count = 0;
-	bool allfound = false;
-
-	while (!allfound)
-	{
-		for (size_t i = 0; i < floorList.size(); i++)
-		{
-			//std::cout << i << " = " << count << std::endl;
-			if (floorList[i].group == count)
+			if (currentGroup->elevation_ > matchingGroup->elevation_ && currentGroup->topElevation_< matchingGroup->topElevation_ ||
+				currentGroup->elevation_ < matchingGroup->elevation_ && currentGroup->topElevation_ > matchingGroup->topElevation_ ||
+				currentGroup->elevation_ < matchingGroup->topElevation_ && currentGroup->topElevation_ > matchingGroup->topElevation_ ||
+				currentGroup->elevation_ < matchingGroup->elevation_ && currentGroup->topElevation_ > matchingGroup->elevation_
+				)
 			{
-				computedElev.emplace_back(floorList[i].elevation);
-				break;
+				if (matchingGroup->mergeNum_ == -1) {
+					matchingGroup->merger_ = currentGroup;
+					matchingGroup->mergeNum_ = 1;
+				}
+
+				else {
+					for (size_t k = 0; k < floorGroups.size(); k++)
+					{
+						if (floorGroups[k].merger_ == matchingGroup)
+						{
+							floorGroups[k].merger_ = currentGroup;
+						}
+						matchingGroup->merger_ = currentGroup;
+					}
+				}
+
 			}
-			
+
 		}
-		count++;
-		if (count > maxCount) {	break; }
 	}
+
+	// merge the groups
+	updateFloorGroup(&floorGroups);
+
+	// find small elevation differences
+	double maxDistance = 1.f;
+
+	for (size_t i = 0; i < floorGroups.size(); i++)
+	{
+		auto currentGroup = &floorGroups[i];
+		for (size_t j = i + 1; j < floorGroups.size(); j++)
+		{
+			auto matchingGroup = &floorGroups[j];
+			if (std::abs(currentGroup->elevation_ - matchingGroup->elevation_) < maxDistance)
+			{
+				if (matchingGroup->mergeNum_ == -1) {
+					matchingGroup->merger_ = currentGroup;
+					matchingGroup->mergeNum_ = 1;
+				}
+
+				else {
+					for (size_t k = 0; k < floorGroups.size(); k++)
+					{
+						if (floorGroups[k].merger_ == matchingGroup)
+						{
+							floorGroups[k].merger_ = currentGroup;
+						}
+						matchingGroup->merger_ = currentGroup;
+					}
+				}
+			}
+		}
+	}
+
+	// merge the groups
+	updateFloorGroup(&floorGroups);
+
+	std::vector<double> computedElev;
+	for (size_t i = 0; i < floorGroups.size(); i++) { computedElev.emplace_back(floorGroups[i].elevation_); }
+
 
 	if (debug)
 	{
-
 		for (size_t i = 0; i < computedElev.size(); i++)
 		{
 			std::cout << "computedElev: " << computedElev[i] << std::endl;
 		}
 	}
 	return computedElev;
+}
 
+void floorProcessor::updateFloorGroup(std::vector<FloorGroupStruct>* floorGroups)
+{
+	std::vector<int> removeIdx;
+
+	int idx = 0;
+	for (auto it = floorGroups->begin(); it != floorGroups->end(); it++)
+	{
+		floorProcessor::FloorGroupStruct currentGroup = *it;
+
+		if (currentGroup.mergeNum_ == 1)
+		{
+			currentGroup.merger_->mergeGroup(&currentGroup);
+			removeIdx.emplace_back(idx);
+		}
+		idx++;
+	}
+	std::reverse(removeIdx.begin(), removeIdx.end());
+
+	for (size_t i = 0; i < removeIdx.size(); i++)
+	{
+		floorGroups->erase(floorGroups->begin() + removeIdx[i]);
+	}
 }
 
 
@@ -306,7 +363,7 @@ std::vector<double> floorProcessor::getFloorElevations(helper* data)
 
 	//TODO scale to correct unit;
 
-	std::cout << "B: " << bigArea << std::endl;
+	//std::cout << "B: " << bigArea << std::endl;
 
 	// ignore small slabs form the process
 	double q = 0.0;
@@ -321,7 +378,7 @@ std::vector<double> floorProcessor::getFloorElevations(helper* data)
 	}
 
 	std::vector<double> Elevations = floorProcessor::computeElevations(filteredFaces);
-	std::cout << "test: " << Elevations.size() << std::endl;
+	//std::cout << "test: " << Elevations.size() << std::endl;
 	return Elevations;
 }
 
@@ -427,8 +484,6 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 	}
 
 }
-
-
 
 void floorProcessor::sortObjects(helper* data)
 {
@@ -627,3 +682,77 @@ void floorProcessor::sortObjects(helper* data)
 
 }
 
+floorProcessor::FloorStruct::FloorStruct(TopoDS_Face face, double area)
+{
+	face_ = face;
+	hasFace = true;
+	
+	if (area != 0)
+	{
+		area_ = area;
+		hasArea = true;
+	}
+
+	isFlat_ = true;
+	hasFlatness = true;
+
+	// get the elevation and flatness
+	double lowHeight = -9999;
+	double topHeight = -9999;
+	TopExp_Explorer expl;
+
+	for (expl.Init(face, TopAbs_VERTEX); expl.More(); expl.Next())
+	{
+		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+		gp_Pnt point = BRep_Tool::Pnt(vertex);
+
+		double currentHeight = point.Z();
+
+		if (lowHeight == -9999) { lowHeight = currentHeight; }
+		else if (lowHeight != currentHeight)
+		{
+			isFlat_ = false;
+			if (lowHeight > currentHeight) { lowHeight = currentHeight; }
+		}
+
+		if (topHeight == -9999) { topHeight = currentHeight; }
+		else if (topHeight != currentHeight)
+		{
+			if (topHeight < currentHeight) { topHeight = currentHeight; }
+		}
+
+
+	}
+	elevation_ = lowHeight;
+	elevation_ = lowHeight;
+	topElevation_ = topHeight;
+	hasElevation = true;
+}
+
+floorProcessor::FloorGroupStruct::FloorGroupStruct(FloorStruct* floor)
+{
+	assigned_ = true;
+	isFlat_ = floor->isFlat_;
+	topElevation_ = floor->elevation_;
+	elevation_ = floor->elevation_;
+
+	floors_.emplace_back(floor);
+}
+
+void floorProcessor::FloorGroupStruct::addFloor(FloorStruct* floor)
+{
+	assigned_ = true;
+	if (isFlat_) { isFlat_ = floor->isFlat_; }
+	if (topElevation_ < floor->topElevation_) { topElevation_ = floor->topElevation_; }
+	if (elevation_ > floor->elevation_) { elevation_ = floor->elevation_; }
+
+	floors_.emplace_back(floor);
+}
+
+void floorProcessor::FloorGroupStruct::mergeGroup(FloorGroupStruct* group)
+{
+	for (size_t i = 0; i < group->floors_.size(); i++) { floors_.emplace_back(group->floors_[i]); }
+	if (isFlat_) { isFlat_ = group->isFlat_; }
+	if (topElevation_ < group->topElevation_) { topElevation_ = group->topElevation_; }
+	if (elevation_ > group->elevation_) { elevation_ = group->elevation_; }
+}

@@ -33,12 +33,12 @@ private:
 	struct FloorStruct
 	{
 		// stored data		
-		bool isFlat;
-		bool isSmall;
-		TopoDS_Face face;
-		double area;
-		double elevation;
-		int group = -1;
+		bool isFlat_;
+		bool isSmall_;
+		TopoDS_Face face_;
+		double area_;
+		double elevation_;
+		double topElevation_;
 
 		// check if data is stored
 		bool hasFlatness = false;
@@ -47,7 +47,30 @@ private:
 		bool hasArea = false;
 		bool hasElevation = false;
 		bool hasGroup = false;
+
+		explicit FloorStruct(TopoDS_Face face, double area = 0);
 	};
+
+	struct FloorGroupStruct {
+		bool assigned_ = false;
+		bool isFlat_;
+		int mergeNum_ = -1;
+		FloorGroupStruct* merger_ = nullptr;
+		double topElevation_ = -9999;
+		double elevation_ = 9999;
+
+		std::vector<FloorStruct*> floors_;
+
+		explicit FloorGroupStruct() {};
+		explicit FloorGroupStruct(FloorStruct* floor);
+
+		// Add a floor to the stuct and update all the varables
+		void addFloor(FloorStruct* floor);
+		
+		// Merge a group into the struct and update all the varables 
+		void mergeGroup(FloorGroupStruct* group);
+	};
+
 	
 	// returns a vector filled with the top faces of the present floorslab objects
 	static std::vector<TopoDS_Face> getSlabFaces(helper* data);
@@ -56,6 +79,8 @@ private:
 	static std::vector<double> getFaceAreas(std::vector<TopoDS_Face> faces);
 
 	static std::vector<double> computeElevations(std::vector<TopoDS_Face> faces);
+
+	static void updateFloorGroup(std::vector<FloorGroupStruct>* floorGroups);
 
 public:
 
@@ -73,7 +98,6 @@ public:
 
 	// TODO make private
 	static void printLevels(std::vector<double> levels);
-	//static void printLevels(std::vector<std::vector<double>> levels);
 };
 
 #endif // FLOORPROCESSOR_HELPER_H

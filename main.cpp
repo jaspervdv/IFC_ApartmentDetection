@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
 
 	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
-		"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+		"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc"//,
 		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
 		//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
