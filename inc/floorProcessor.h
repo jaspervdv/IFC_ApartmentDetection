@@ -1,4 +1,4 @@
-#define IfcSchema Ifc4
+#define IfcSchema Ifc2x3
 #include "helper.h"
 
 #include <boost/log/core.hpp>
@@ -36,7 +36,6 @@ private:
 		bool isFlat_;
 		bool isSmall_;
 		TopoDS_Face face_;
-		double area_;
 		double elevation_;
 		double topElevation_;
 
@@ -44,7 +43,6 @@ private:
 		bool hasFlatness = false;
 		bool hasSmallness = false;
 		bool hasFace = false;
-		bool hasArea = false;
 		bool hasElevation = false;
 		bool hasGroup = false;
 
@@ -64,6 +62,8 @@ private:
 		explicit FloorGroupStruct() {};
 		explicit FloorGroupStruct(FloorStruct* floor);
 
+		void markMerger(FloorStruct* targetFloor, FloorStruct* mergingFloor);
+
 		// Add a floor to the stuct and update all the varables
 		void addFloor(FloorStruct* floor);
 		
@@ -71,14 +71,15 @@ private:
 		void mergeGroup(FloorGroupStruct* group);
 	};
 
+	static double getMedian(std::vector<double> l);
 	
 	// returns a vector filled with the top faces of the present floorslab objects
+	static std::vector<TopoDS_Shape> getSlabShapes(helper* data);
 	static std::vector<TopoDS_Face> getSlabFaces(helper* data);
+	static std::vector<TopoDS_Face> getSlabFaces(std::vector <TopoDS_Shape> shapes);
 
 	// returns a vector of the areas of the faces
 	static std::vector<double> getFaceAreas(std::vector<TopoDS_Face> faces);
-
-	static std::vector<double> computeElevations(std::vector<TopoDS_Face> faces);
 
 	static void updateFloorGroup(std::vector<FloorGroupStruct>* floorGroups);
 

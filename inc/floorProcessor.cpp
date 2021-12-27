@@ -1,5 +1,71 @@
 #include "floorProcessor.h"
 
+double floorProcessor::getMedian(std::vector<double> l)
+{
+	assert(!l.empty());
+	if (l.size() % 2 == 0) {
+		const auto median_it1 = l.begin() + l.size() / 2 - 1;
+		const auto median_it2 = l.begin() + l.size() / 2;
+
+		std::nth_element(l.begin(), median_it1, l.end());
+		const auto e1 = *median_it1;
+
+		std::nth_element(l.begin(), median_it2, l.end());
+		const auto e2 = *median_it2;
+
+		return (e1 + e2) / 2;
+
+	}
+	else {
+		const auto median_it = l.begin() + l.size() / 2;
+		std::nth_element(l.begin(), median_it, l.end());
+		return *median_it;
+	}
+}
+
+std::vector<TopoDS_Shape> floorProcessor::getSlabShapes(helper* data)
+{
+	std::vector<TopoDS_Shape> floorShapes;
+	IfcSchema::IfcSlab::list::ptr slabs = data->getSourceFile()->instances_by_type<IfcSchema::IfcSlab>();
+
+	auto kernel = data->getKernel();
+
+	for (IfcSchema::IfcSlab::list::it it = slabs->begin(); it != slabs->end(); ++it) {
+		const IfcSchema::IfcSlab* slab = *it;
+
+		// get the IfcShapeRepresentation
+		auto slabProduct = slab->Representation()->Representations();
+
+		//get the global coordinate of the local origin
+		gp_Trsf trsf;
+		kernel->convert_placement(slab->ObjectPlacement(), trsf);
+
+		for (auto et = slabProduct.get()->begin(); et != slabProduct.get()->end(); et++) {
+			const IfcSchema::IfcRepresentation* slabRepresentation = *et;
+
+			// select the body of the slabs (ignore the bounding boxes)
+			if (slabRepresentation->data().getArgument(1)->toString() == "'Body'")
+			{
+				// select the geometry format
+				auto slabItems = slabRepresentation->Items();
+
+				IfcSchema::IfcRepresentationItem* slabItem = *slabRepresentation->Items().get()->begin();
+
+				auto ob = kernel->convert(slabItem);
+
+				// move to OpenCASCADE
+				const TopoDS_Shape rShape = ob[0].Shape();
+				const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+
+				floorShapes.emplace_back(aShape);
+			}
+		}
+	}
+
+	return floorShapes;
+
+}
+
 std::vector<TopoDS_Face> floorProcessor::getSlabFaces(helper* data) {
 
 	std::vector<TopoDS_Face> floorFaces;
@@ -62,6 +128,39 @@ std::vector<TopoDS_Face> floorProcessor::getSlabFaces(helper* data) {
 	return floorFaces;
 }
 
+std::vector<TopoDS_Face> floorProcessor::getSlabFaces(std::vector<TopoDS_Shape> shapes)
+{
+	std::vector<TopoDS_Face> floorFaces;
+	for (size_t i = 0; i < shapes.size(); i++)
+	{
+		TopoDS_Shape floorshape = shapes[i];
+
+		// set variables for top face selection
+		TopoDS_Face topFace;
+		double topHeight = -9999;
+
+		// loop through all faces of slab
+		TopExp_Explorer expl;
+		for (expl.Init(floorshape, TopAbs_FACE); expl.More(); expl.Next())
+		{
+			TopoDS_Face face = TopoDS::Face(expl.Current());
+			BRepAdaptor_Surface brepAdaptorSurface(face, Standard_True);
+
+
+			// select floor top face
+			double faceHeight = face.Location().Transformation().TranslationPart().Z();
+
+			if (faceHeight > topHeight)
+			{
+				topFace = face;
+				topHeight = faceHeight;
+			}
+		}
+		floorFaces.emplace_back(topFace);
+	}
+	return floorFaces;
+}
+
 std::vector<double> floorProcessor::getFaceAreas(std::vector<TopoDS_Face> faces) {
 
 	std::vector<double> floorArea;
@@ -79,24 +178,104 @@ std::vector<double> floorProcessor::getFaceAreas(std::vector<TopoDS_Face> faces)
 	return floorArea;
 }
 
-std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> faces) {
-	
+void floorProcessor::updateFloorGroup(std::vector<FloorGroupStruct>* floorGroups)
+{
+	std::vector<int> removeIdx;
+
+	int idx = 0;
+	for (auto it = floorGroups->begin(); it != floorGroups->end(); it++)
+	{
+		floorProcessor::FloorGroupStruct currentGroup = *it;
+
+		if (currentGroup.mergeNum_ == 1)
+		{
+			currentGroup.merger_->mergeGroup(&currentGroup);
+			removeIdx.emplace_back(idx);
+		}
+		idx++;
+	}
+	std::reverse(removeIdx.begin(), removeIdx.end());
+
+	for (size_t i = 0; i < removeIdx.size(); i++)
+	{
+		floorGroups->erase(floorGroups->begin() + removeIdx[i]);
+	}
+}
+
+
+void floorProcessor::printLevels(std::vector<double> levels) {
+	std::sort(levels.begin(), levels.end());
+	for (unsigned int i = 0; i < levels.size(); i++)
+	{
+		std::cout << levels[i] << std::endl;
+	}
+}
+
+
+std::vector<double> floorProcessor::getStoreyElevations(helper* data)
+{
+	IfcSchema::IfcBuildingStorey::list::ptr storeys = data->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
+	std::vector<double> storeyElevation;
+
+	for (IfcSchema::IfcBuildingStorey::list::it it = storeys->begin(); it != storeys->end(); ++it)
+	{
+		const IfcSchema::IfcBuildingStorey* storey = *it;
+		storeyElevation.emplace_back(storey->Elevation() * data->getLengthMultiplier());
+	}
+
+	if (!storeyElevation.size()) { std::cout << "No storeys can be found" << std::endl; }
+
+	return storeyElevation;
+}
+
+std::vector<double> floorProcessor::getFloorElevations(helper* data)
+{
+	// get the top faces of the floors
+	std::vector< TopoDS_Shape> floorShapes = floorProcessor::getSlabShapes(data);
+	std::vector<TopoDS_Face> floorFaces = floorProcessor::getSlabFaces(floorShapes);
+
+	// do not compute elevation if the model is partial and not a construction model 
+	if (data->getDepending() && !data->getIsConstruct()) { return {};	}
+
+	if (!data->getDepending())
+	{
+		// TODO detect floor thickness
+		// TODO get orientating bounding box (based on the longest edge)
+		// TODO get shortest side of the bounding box
+		// TODO make a rule with the width and the orentated bounding box
+	}
+
 	bool debug = true;
 
 	// make floor struct
-	std::vector<double> faceAreas = floorProcessor::getFaceAreas(faces);
+	std::vector<double> faceAreas = floorProcessor::getFaceAreas(floorFaces);
 
-	std::vector<FloorStruct> floorList;
-	for (size_t i = 0; i < faces.size(); i++)
-	{ 
-		// TODO remove extremely small area slabs
-		floorProcessor::FloorStruct floorobject(faces[i], faceAreas[i]);
-		floorList.emplace_back(floorobject);
+	for (size_t i = 0; i < faceAreas.size(); i++)
+	{
+		std::cout << faceAreas[i] << std::endl;
 	}
 
+	auto SmallestAllowedArea = getMedian(faceAreas) * 0.1;
+
+	for (size_t i = 0; i < faceAreas.size(); i++)
+	{
+		std::cout << faceAreas[i] << std::endl;
+	}
+
+	std::vector<FloorStruct> floorList;
+	for (size_t i = 0; i < floorFaces.size(); i++)
+	{
+		// filter out small floor slabs
+		//if (faceAreas[i] > SmallestAllowedArea)
+		{
+			floorProcessor::FloorStruct floorobject(floorFaces[i], faceAreas[i]);
+			floorList.emplace_back(floorobject);
+		}
+	}
+
+
+
 	std::vector<FloorGroupStruct> floorGroups;
-
-
 
 	// pair per "pure" elevation
 	for (size_t i = 0; i < floorList.size(); i++) {
@@ -184,8 +363,8 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 
 							double computedDistance = p3.Distance(pair.p1) + p3.Distance(pair.p2);
 							if (computedDistance + 0.05 > referenceDistance && computedDistance - 0.05 < referenceDistance) {
-								if (matchingGroup->mergeNum_ == -1) { 
-									matchingGroup->merger_ = currentGroup; 
+								if (matchingGroup->mergeNum_ == -1) {
+									matchingGroup->merger_ = currentGroup;
 									matchingGroup->mergeNum_ = 1;
 								}
 								else {
@@ -217,7 +396,7 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 		{
 			auto matchingGroup = &floorGroups[j];
 
-			if (currentGroup->elevation_ > matchingGroup->elevation_ && currentGroup->topElevation_< matchingGroup->topElevation_ ||
+			if (currentGroup->elevation_ > matchingGroup->elevation_ && currentGroup->topElevation_ < matchingGroup->topElevation_ ||
 				currentGroup->elevation_ < matchingGroup->elevation_ && currentGroup->topElevation_ > matchingGroup->topElevation_ ||
 				currentGroup->elevation_ < matchingGroup->topElevation_ && currentGroup->topElevation_ > matchingGroup->topElevation_ ||
 				currentGroup->elevation_ < matchingGroup->elevation_ && currentGroup->topElevation_ > matchingGroup->elevation_
@@ -258,19 +437,26 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 			auto matchingGroup = &floorGroups[j];
 			if (std::abs(currentGroup->elevation_ - matchingGroup->elevation_) < maxDistance)
 			{
-				if (matchingGroup->mergeNum_ == -1) {
-					matchingGroup->merger_ = currentGroup;
-					matchingGroup->mergeNum_ = 1;
+				// always merge to the floor with the smallest elevation
+				auto targetGroup = currentGroup;
+				auto sourceGroup = matchingGroup;
+
+				if (targetGroup->elevation_ > sourceGroup->elevation_)
+				{
+					targetGroup = matchingGroup;
+					sourceGroup = currentGroup;
 				}
 
-				else {
+				if (sourceGroup->mergeNum_ == -1) {
+					sourceGroup->merger_ = targetGroup;
+					sourceGroup->mergeNum_ = 1;
+				}
+				else 
+				{
 					for (size_t k = 0; k < floorGroups.size(); k++)
 					{
-						if (floorGroups[k].merger_ == matchingGroup)
-						{
-							floorGroups[k].merger_ = currentGroup;
-						}
-						matchingGroup->merger_ = currentGroup;
+						if (floorGroups[k].merger_ == sourceGroup) { floorGroups[k].merger_ = targetGroup; }
+						sourceGroup->merger_ = targetGroup;
 					}
 				}
 			}
@@ -291,95 +477,10 @@ std::vector<double> floorProcessor::computeElevations(std::vector<TopoDS_Face> f
 			std::cout << "computedElev: " << computedElev[i] << std::endl;
 		}
 	}
+
+	std::sort(computedElev.begin(), computedElev.end());
+
 	return computedElev;
-}
-
-void floorProcessor::updateFloorGroup(std::vector<FloorGroupStruct>* floorGroups)
-{
-	std::vector<int> removeIdx;
-
-	int idx = 0;
-	for (auto it = floorGroups->begin(); it != floorGroups->end(); it++)
-	{
-		floorProcessor::FloorGroupStruct currentGroup = *it;
-
-		if (currentGroup.mergeNum_ == 1)
-		{
-			currentGroup.merger_->mergeGroup(&currentGroup);
-			removeIdx.emplace_back(idx);
-		}
-		idx++;
-	}
-	std::reverse(removeIdx.begin(), removeIdx.end());
-
-	for (size_t i = 0; i < removeIdx.size(); i++)
-	{
-		floorGroups->erase(floorGroups->begin() + removeIdx[i]);
-	}
-}
-
-
-void floorProcessor::printLevels(std::vector<double> levels) {
-	std::sort(levels.begin(), levels.end());
-	for (unsigned int i = 0; i < levels.size(); i++)
-	{
-		std::cout << levels[i] << std::endl;
-	}
-}
-
-
-std::vector<double> floorProcessor::getStoreyElevations(helper* data)
-{
-	IfcSchema::IfcBuildingStorey::list::ptr storeys = data->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
-	std::vector<double> storeyElevation;
-
-	for (IfcSchema::IfcBuildingStorey::list::it it = storeys->begin(); it != storeys->end(); ++it)
-	{
-		const IfcSchema::IfcBuildingStorey* storey = *it;
-		storeyElevation.emplace_back(storey->Elevation() * data->getLengthMultiplier());
-	}
-
-	if (!storeyElevation.size()) { std::cout << "No storeys can be found" << std::endl; }
-
-	return storeyElevation;
-}
-
-std::vector<double> floorProcessor::getFloorElevations(helper* data)
-{
-	// get the floor faces and floor areas
-	std::vector<TopoDS_Face> floorFaces = floorProcessor::getSlabFaces(data);
-	std::vector<double> floorArea = floorProcessor::getFaceAreas(floorFaces);
-
-	// find the biggest slab face area
-	double bigArea = 0;
-	for (size_t i = 0; i < floorArea.size(); i++)
-	{
-		std::cout << floorArea[i] << std::endl;
-
-		if (floorArea[i] > bigArea) {
-			bigArea = floorArea[i];
-		}
-	}
-
-	//TODO scale to correct unit;
-
-	//std::cout << "B: " << bigArea << std::endl;
-
-	// ignore small slabs form the process
-	double q = 0.0;
-
-	std::vector<TopoDS_Face> filteredFaces;
-	for (size_t i = 0; i < floorFaces.size(); i++)
-	{
-		if (floorArea[i] > bigArea * q)
-		{
-			filteredFaces.emplace_back(floorFaces[i]);
-		}
-	}
-
-	std::vector<double> Elevations = floorProcessor::computeElevations(filteredFaces);
-	//std::cout << "test: " << Elevations.size() << std::endl;
-	return Elevations;
 }
 
 bool floorProcessor::compareElevations(std::vector<double> elevations, std::vector<double> floors)
@@ -489,6 +590,7 @@ void floorProcessor::sortObjects(helper* data)
 {
 	IfcParse::IfcFile*  sourcefile = data->getSourceFile();
 	auto kernel = data->getKernel();
+	double lengthMulti = data->getUnits()[0];
 
 	// make a vector with the height, spatial structure and a temp product  list
 	IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = sourcefile->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
@@ -499,7 +601,7 @@ void floorProcessor::sortObjects(helper* data)
 	{
 		IfcSchema::IfcRelContainedInSpatialStructure* structure = *it;
 		IfcSchema::IfcProduct::list::ptr container(new IfcSchema::IfcProduct::list);
-		double height = std::stod(structure->RelatingStructure()->data().getArgument(9)->toString()) * data->getUnits()[0];
+		double height = std::stod(structure->RelatingStructure()->data().getArgument(9)->toString()) * lengthMulti;
 		
 		pairedContainers.emplace_back(
 			std::make_tuple( 
@@ -641,57 +743,40 @@ void floorProcessor::sortObjects(helper* data)
 			}
 		}
 
-		
-
 		int maxidx = pairedContainers.size();
 
-		for (size_t i = 0; i < maxidx; i++)
-		{
+		// vind smallest distance to floor elevation
+		double smallestDistance = 1000;
+		double indxSmallestDistance = 0;
+		for (size_t i = 0; i < maxidx; i++) {
 			auto currentTuple = pairedContainers[i];
-			double distance = height - std::get<0>(currentTuple);
+			double distance = height * lengthMulti - std::get<0>(currentTuple);
+			
+			if (distance < 0.1 * lengthMulti) { break; }
 
-			if (distance == 0)
+			if (distance < smallestDistance)
 			{
-				std::get<2>(currentTuple)->push(product);
-				break;
-			}
-			if (i + 1 == maxidx)
-			{
-				std::get<2>(currentTuple)->push(product);
-				break;
-			}
+				smallestDistance = distance;
+				indxSmallestDistance = i;
+			} 
 
-			double nextDistance = height - std::get<0>(pairedContainers[i + 1]);
-
-			if (distance > 0 && nextDistance < 0)
-			{
-				std::get<2>(currentTuple)->push(product);
-				break;
-			}
+			if (distance == 0) { break; }
 		}
 
-		//std::cout << std::endl;
+		std::get<2>(pairedContainers[indxSmallestDistance])->push(product);
 	}
 
 	for (size_t i = 0; i < pairedContainers.size(); i++)
 	{
 		auto currentTuple = pairedContainers[i];
-
 		std::get<1>(currentTuple)->setRelatedElements(std::get<2>(currentTuple));
 	}
-
 }
 
 floorProcessor::FloorStruct::FloorStruct(TopoDS_Face face, double area)
 {
 	face_ = face;
 	hasFace = true;
-	
-	if (area != 0)
-	{
-		area_ = area;
-		hasArea = true;
-	}
 
 	isFlat_ = true;
 	hasFlatness = true;

@@ -161,6 +161,13 @@ IfcSchema::IfcOwnerHistory* helper::getHistory()
 	return *ownerHistories.get()->begin();
 }
 
+void helper::wipeObject(helper* data, int id)
+{
+	//TODO find the nested indx located in the file
+	//TODO find if the nested idnx have other dependencies 
+	//TODO remove objects at indx that do not have dependencies
+}
+
 void helper::writeToFile(std::string path)
 {
 	std::ofstream storageFile;

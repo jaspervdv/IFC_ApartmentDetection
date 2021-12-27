@@ -1,4 +1,4 @@
-#define IfcSchema Ifc4
+#define IfcSchema Ifc2x3
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -20,6 +20,10 @@ private:
 	double length_ = 0;
 	double area_ = 0;
 	double volume_ = 0;
+
+	bool hasFloors = false;
+	bool isConstruct = false; //TODO implement
+	bool isPartial = false;
 
 	IfcParse::IfcFile* file_;
 	IfcGeom::Kernel* kernel_;
@@ -63,14 +67,24 @@ public:
 	// returns a pointer to the owner(s)
 	IfcSchema::IfcOwnerHistory* getHistory();
 
+	bool getDepending() { return isPartial; }
+
+	bool getIsConstruct() { return isConstruct; }
+
+	void setIsConstruct(bool b) { isConstruct = b; }
+
 	//TODO implement
+	
+	// add bounding box items for the present objects in the data
+	void createBounds(helper* data);
+
 	// deletes all dependencies of an object and the object itself
 	static void wipeObject(helper* data, int id);
 
-	// deletes all dependencies of an object and the object itself
-	static void wipeObject(IfcHierarchyHelper<IfcSchema> data, int id);
 
 	void writeToFile(std::string path);
+
+	void setDepending(bool i) { isPartial = i; }
 
 };
 
