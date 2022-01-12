@@ -31,28 +31,63 @@
 #include <ifcgeom/IfcGeomRepresentation.h>
 #include <ifcgeom_schema_agnostic/kernel.h>
 
-
 #if USE_VLD
 #include <vld.h>
 #endif
 
 typedef IfcParse::IfcGlobalId guid;
 
-int main(int argc, char** argv) {
-
-	Logger::SetOutput(&std::cout, &std::cout);
-
-	std::cout << "[INFO] This build is made for " << IfcSchema::get_schema().name() << std::endl;
+std::vector<std::string> GetSources() {
 
 	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
-		//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
-		"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
-		"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
-		"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
 	};
 
-	// TODO replace with file save prompt
+	return sourcePathArray;
+}
+
+void compareElevationsOutput(std::vector<double> left, std::vector<double> right) {
+	int tab = 35;
+	if (left.size() != right.size())
+	{
+		if (left.size() > right.size())
+		{
+			int minIndx = right.size();
+			for (size_t i = 0; i < left.size(); i++)
+			{
+				if (i < minIndx) { std::cout << std::left << std::setw(tab) << left[i] << right[i] << std::endl; }
+				else { std::cout << std::left << std::setw(tab) << left[i] << "-" << std::endl; }
+			}
+		}
+		else {
+			int minIndx = left.size();
+			for (size_t i = 0; i < right.size(); i++)
+			{
+				if (i < minIndx) { std::cout << std::left << std::setw(tab) << left[i] << right[i] << std::endl; }
+				else { std::cout << std::left << std::setw(tab) << "-" << right[i] << std::endl; }
+			}
+		}
+	}
+	else
+	{
+		for (size_t i = 0; i < right.size(); i++) { std::cout << std::left << std::setw(tab) << left[i] << right[i] << std::endl; }
+	}
+}
+
+
+int main(int argc, char** argv) {
+
+	// outputs errors related to the selected objects
+	if (false) { Logger::SetOutput(&std::cout, &std::cout); }
+
+	std::cout << "[INFO] This build is made for " << IfcSchema::get_schema().name() << std::endl;
+
+	std::vector<std::string> sourcePathArray = GetSources();
+
 	// make export path
 	std::vector<std::string> exportPathArray;
 	std::vector<std::string> fileNames;
@@ -69,93 +104,41 @@ int main(int argc, char** argv) {
 		exportPathArray.emplace_back(exportPath);
 	}
 
-	std::vector<int> constructionIndxList;
-	// get construction model num from user
+	int constructionIndx = -1;
 
+	// get construction model num from user
 	if (sourcePathArray.size() == 1)
 	{
 		std::cout << "one file found, considered combination file" << std::endl;
 	}
 	else {
-
 		while (true)
 		{
-			constructionIndxList.clear();
 			bool validInput = true;
 			std::string stringNum = "";
-			std::string constructionIndx;
 
-			std::cout << "Please enter number of construction model, if multiple numbers seperaty by ',', if no constuction model enter 0." << std::endl;
+			std::cout << "Please enter number of construction model, if no constuction model enter 0." << std::endl;
 			for (size_t i = 0; i < fileNames.size(); i++) { std::cout << i + 1 << ": " << fileNames[i] << std::endl; }
 			std::cout << "Num: ";
-			std::cin >> constructionIndx;
+			std::cin >> stringNum;
 
-			for (size_t i = 0; i < constructionIndx.size(); i++)
+			for (size_t i = 0; i < stringNum.size(); i++)
 			{
-				bool isDig = isdigit(constructionIndx[i]);
-
-				if (!isDig && !constructionIndx.size() - 1 == i)
+				if (!std::isdigit(stringNum[i]))
 				{
-					std::cout << "Input invalid!" << std::endl;
 					validInput = false;
+				}
+			}
+
+			if (validInput)
+			{
+				constructionIndx = std::stoi(stringNum) - 1;
+				if (fileNames.size() >= constructionIndx + 1) {
 					break;
 				}
-				else {
-					if (constructionIndx[i] == ',' || constructionIndx.size() - 1 == i)
-					{
-						int inputNum;
-
-						if (constructionIndx.size() - 1 == i && isDig)
-						{
-							inputNum = std::stoi(stringNum += constructionIndx[i]);
-						}
-						else {
-							inputNum = std::stoi(stringNum);
-						}
-
-						stringNum = "";
-
-						if (inputNum <= fileNames.size()) { constructionIndxList.emplace_back(inputNum); }
-						else {
-							std::cout << "Input invalid!" << std::endl;
-							validInput = false;
-							break;
-						}
-					}
-					else if (isDig) {
-						stringNum += constructionIndx[i];
-					}
-				}
-
 			}
-			if (validInput) {
-				std::cout << std::endl;
-				for (size_t i = 0; i < constructionIndxList.size(); i++)
-				{
-					if (constructionIndxList[i] == 0) { std::cout << "No construction model present." << std::endl; }
-					else { std::cout << "Model '" << fileNames[constructionIndxList[i] - 1] << "' has been selected as construction model" << std::endl; }
-				}
 
-				while (true)
-				{
-					std::string con;
-					std::cout << "continue? (Y/N): ";
-					std::cin >> con;
-
-					boost::to_upper(con);
-
-					if (con == "Y") { break; }
-					else if (con == "N")
-					{
-						validInput = false;
-						break;
-					}
-					else { std::cout << "Invalid input" << std::endl; }
-
-				}
-
-			}
-			if (validInput) { break; }
+			std::cout << "\n [INFO] Please enter a valid number! \n" << std::endl;
 		}
 	}
 
@@ -174,51 +157,73 @@ int main(int argc, char** argv) {
 		if (!h->hasSetUnits()) { return 0; }
 
 		// set the construction model
-		for (size_t j = 0;  j < constructionIndxList.size();  j++)
-		{
-			if (i == constructionIndxList[j] - 1) {	h->setIsConstruct(true); }
-		}
+		if (i == constructionIndx) { h->setIsConstruct(true); }
+
 		hFiles.emplace_back(h);
 	}
 
 	// evaluate the storeys
 	std::vector<double> floorElevation;
+	std::vector<double> StoredFloorElevation;
 	for (size_t i = 0; i < hFiles.size(); i++)
 	{
-		std::vector<double> storeyElevation = floorProcessor::getStoreyElevations(hFiles[i]);
-
-		if (findElevations)
+		if (hFiles[i]->getIsConstruct() || !hFiles[i]->getDepending())
 		{
-			std::vector<double> tempFloorElevation = floorProcessor::getFloorElevations(hFiles[i]);
+			StoredFloorElevation = floorProcessor::getStoreyElevations(hFiles[i]);
 
-			if (tempFloorElevation.size() != 0)
+			if (findElevations)
 			{
-				floorElevation = tempFloorElevation;
+				std::vector<double> tempFloorElevation = floorProcessor::getFloorElevations(hFiles[i]);
 
-				std::cout << "found storeys:" << std::endl;
-				floorProcessor::printLevels(storeyElevation);
-
-				std::cout << "computed storeys:" << std::endl;
-				floorProcessor::printLevels(floorElevation);
+				if (tempFloorElevation.size() != 0) { floorElevation = tempFloorElevation; }
+				break;
 			}
 		}
-
-
 	}
 
+	// allow user to select which elevations are used
+	std::vector<double> usedElevations = StoredFloorElevation;
+	if (!floorProcessor::compareElevations(StoredFloorElevation, floorElevation))
+	{
+		std::string cont = "";
+
+		std::cout << "[INFO] Software detected different storey elevations than are stored in the IFC file \n" << std::endl;
+		std::cout << std::left << std::setw(35) << "IFC file storey elevations" << "Computed Elevations" << std::endl;
+		compareElevationsOutput(StoredFloorElevation, floorElevation);
+		std::cout << "\nUse the recalculated Storey elevations? (Y/N):" << std::endl;
+
+		while (true)
+		{
+			std::cin >> cont;
+
+			if (cont == "Y" || cont == "y")
+			{
+				usedElevations = floorElevation;
+				break;
+			}
+			if (cont == "N" || cont == "n") 
+			{
+				break;
+			}
+		}
+	}
+	else {
+		std::cout << "[INFO] Software detected identical storey elevations as are stored in the IFC file" << std::endl;
+	}
+
+	// sort the objects
 	for (size_t i = 0; i < hFiles.size(); i++)
 	{
 		// wipe storeys
 		floorProcessor::cleanStoreys(hFiles[i]);
 		// create new storeys
-		floorProcessor::createStoreys(hFiles[i], floorElevation);
+		floorProcessor::createStoreys(hFiles[i], usedElevations);
 		
 		// match objects to new storeys
 		floorProcessor::sortObjects(hFiles[i]);
 
 	}
 
-	//TODO clash detection
 	//TODO room detection and check
 	//TODO room creation
 	//TODO appartement detection

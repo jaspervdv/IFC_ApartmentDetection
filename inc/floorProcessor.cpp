@@ -224,6 +224,7 @@ std::vector<double> floorProcessor::getStoreyElevations(helper* data)
 	}
 
 	if (!storeyElevation.size()) { std::cout << "No storeys can be found" << std::endl; }
+	std::sort(storeyElevation.begin(), storeyElevation.end());
 
 	return storeyElevation;
 }
@@ -245,22 +246,12 @@ std::vector<double> floorProcessor::getFloorElevations(helper* data)
 		// TODO make a rule with the width and the orentated bounding box
 	}
 
-	bool debug = true;
+	bool debug = false;
 
 	// make floor struct
 	std::vector<double> faceAreas = floorProcessor::getFaceAreas(floorFaces);
 
-	for (size_t i = 0; i < faceAreas.size(); i++)
-	{
-		std::cout << faceAreas[i] << std::endl;
-	}
-
 	auto SmallestAllowedArea = getMedian(faceAreas) * 0.1;
-
-	for (size_t i = 0; i < faceAreas.size(); i++)
-	{
-		std::cout << faceAreas[i] << std::endl;
-	}
 
 	std::vector<FloorStruct> floorList;
 	for (size_t i = 0; i < floorFaces.size(); i++)
@@ -488,23 +479,21 @@ bool floorProcessor::compareElevations(std::vector<double> elevations, std::vect
 	bool sameSize = false;
 	if (floors.size() == elevations.size())
 	{
-		std::cout << "[Info] Detected floors and storeys match" << std::endl;
+		for (size_t i = 0; i < elevations.size(); i++)
+		{
+			double rightElevation = floors[i];
+			double leftElevation = elevations[i];
+
+			if (rightElevation != leftElevation) { return false; }
+
+		}
 		return true;
 	}
 	else
 	{
-		std::cout << "[Info] Detected floors and storeys mismatch!" << std::endl;
-		std::cout << "- " << floors.size() << " floors detected, " << elevations.size() << " storeys placed." << std::endl;
+		//std::cout << "- " << floors.size() << " floors detected, " << elevations.size() << " storeys placed." << std::endl;
 		return false;
 	}
-
-	for (size_t i = 0; i < elevations.size(); i++)
-	{
-		double rightElevation = floors[i];
-		double leftElevation = elevations[i];
-
-	}
-	return true;
 }
 
 void floorProcessor::cleanStoreys(helper* data)
@@ -752,7 +741,7 @@ void floorProcessor::sortObjects(helper* data)
 			auto currentTuple = pairedContainers[i];
 			double distance = height * lengthMulti - std::get<0>(currentTuple);
 			
-			if (distance < 0.1 * lengthMulti) { break; }
+			if (distance < 0) { break; }
 
 			if (distance < smallestDistance)
 			{
