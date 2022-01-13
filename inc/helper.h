@@ -25,6 +25,9 @@ private:
 	bool isConstruct = false; //TODO implement
 	bool isPartial = false;
 
+	std::string path_;
+	std::string fileName_;
+
 	IfcParse::IfcFile* file_;
 	IfcGeom::Kernel* kernel_;
 
@@ -58,6 +61,10 @@ public:
 	// returns the volume multiplier
 	double getVolumeMultiplier() const { return volume_; }
 
+	std::string getName() const { return fileName_; }
+
+	std::string getPath() const { return path_; }
+
 	// returns a pointer to the sourcefile
 	IfcParse::IfcFile* getSourceFile() const { return file_; }
 
@@ -72,6 +79,10 @@ public:
 	bool getIsConstruct() { return isConstruct; }
 
 	void setIsConstruct(bool b) { isConstruct = b; }
+	
+	void setPath(std::string path) { path_ = path; }
+
+	void setName(std::string name) { fileName_ = name; }
 
 	//TODO implement
 	
@@ -80,7 +91,6 @@ public:
 
 	// deletes all dependencies of an object and the object itself
 	static void wipeObject(helper* data, int id);
-
 
 	void writeToFile(std::string path);
 

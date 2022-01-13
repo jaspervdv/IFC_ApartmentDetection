@@ -86,8 +86,14 @@ private:
 public:
 
 	static std::vector<double> getStoreyElevations(helper* data);
-	static std::vector<double> getFloorElevations(helper* data);
+	static std::vector<double> getStoreyElevations(std::vector<helper*> data);
+
+	static std::vector<double> computeFloorElevations(helper* data);
+	static std::vector<double> computeFloorElevations(std::vector<helper*> data);
+
 	static bool compareElevations(std::vector<double> elevations, std::vector<double> floors);
+
+	static void processStoreys(std::vector<helper*> data, std::vector<double> elevations);
 
 	// removes all the storey data from the file
 	static void cleanStoreys(helper* data);

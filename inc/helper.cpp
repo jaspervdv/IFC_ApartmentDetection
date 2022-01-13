@@ -172,8 +172,8 @@ void helper::writeToFile(std::string path)
 {
 	std::ofstream storageFile;
 	storageFile.open(path);
-	std::cout << "exporting" << std::endl;
+	std::cout << "[INFO] Exporting file " << fileName_ << std::endl;
 	storageFile << *file_;
-	std::cout << "exported succesfully" << std::endl;
+	std::cout << "[INFO] Exported succesfully" << std::endl;
 	storageFile.close();
 }

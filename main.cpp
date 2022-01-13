@@ -3,6 +3,7 @@
 
 #include "inc/helper.h"
 #include "inc/floorProcessor.h"
+#include "inc/roomProcessor.h"
 
 // basic includes
 #include <iostream>
@@ -50,7 +51,7 @@ std::vector<std::string> GetSources() {
 	return sourcePathArray;
 }
 
-void compareElevationsOutput(std::vector<double> left, std::vector<double> right) {
+void compareElevationsOutput(const std::vector<double> left, const std::vector<double> right) {
 	int tab = 35;
 	if (left.size() != right.size())
 	{
@@ -75,6 +76,18 @@ void compareElevationsOutput(std::vector<double> left, std::vector<double> right
 	else
 	{
 		for (size_t i = 0; i < right.size(); i++) { std::cout << std::left << std::setw(tab) << left[i] << right[i] << std::endl; }
+	}
+}
+
+bool yesNoQuestion() {
+	std::string cont = "";
+
+	while (true)
+	{
+		std::cin >> cont;
+
+		if (cont == "Y" || cont == "y") { return true; }
+		if (cont == "N" || cont == "n") { return false; }
 	}
 }
 
@@ -143,7 +156,6 @@ int main(int argc, char** argv) {
 	}
 
 	std::cout << std::endl;
-	bool findElevations = true;
 
 	std::vector<helper*> hFiles;
 
@@ -158,71 +170,43 @@ int main(int argc, char** argv) {
 
 		// set the construction model
 		if (i == constructionIndx) { h->setIsConstruct(true); }
+		h->setName(fileNames[i]);		
 
 		hFiles.emplace_back(h);
 	}
 
 	// evaluate the storeys
-	std::vector<double> floorElevation;
-	std::vector<double> StoredFloorElevation;
-	for (size_t i = 0; i < hFiles.size(); i++)
-	{
-		if (hFiles[i]->getIsConstruct() || !hFiles[i]->getDepending())
-		{
-			StoredFloorElevation = floorProcessor::getStoreyElevations(hFiles[i]);
-
-			if (findElevations)
-			{
-				std::vector<double> tempFloorElevation = floorProcessor::getFloorElevations(hFiles[i]);
-
-				if (tempFloorElevation.size() != 0) { floorElevation = tempFloorElevation; }
-				break;
-			}
-		}
-	}
+	std::vector<double> floorElevation = floorProcessor::computeFloorElevations(hFiles);
+	std::vector<double> StoredFloorElevation = floorProcessor::getStoreyElevations(hFiles);
 
 	// allow user to select which elevations are used
 	std::vector<double> usedElevations = StoredFloorElevation;
 	if (!floorProcessor::compareElevations(StoredFloorElevation, floorElevation))
 	{
-		std::string cont = "";
-
 		std::cout << "[INFO] Software detected different storey elevations than are stored in the IFC file \n" << std::endl;
 		std::cout << std::left << std::setw(35) << "IFC file storey elevations" << "Computed Elevations" << std::endl;
 		compareElevationsOutput(StoredFloorElevation, floorElevation);
-		std::cout << "\nUse the recalculated Storey elevations? (Y/N):" << std::endl;
+		std::cout << "\nUse the recalculated Storey elevations? (Y/N): ";
 
-		while (true)
-		{
-			std::cin >> cont;
-
-			if (cont == "Y" || cont == "y")
-			{
-				usedElevations = floorElevation;
-				break;
-			}
-			if (cont == "N" || cont == "n") 
-			{
-				break;
-			}
-		}
+		if (yesNoQuestion()) { usedElevations = floorElevation; }
 	}
 	else {
 		std::cout << "[INFO] Software detected identical storey elevations as are stored in the IFC file" << std::endl;
 	}
 
-	// sort the objects
-	for (size_t i = 0; i < hFiles.size(); i++)
+	if (usedElevations == StoredFloorElevation)
 	{
-		// wipe storeys
-		floorProcessor::cleanStoreys(hFiles[i]);
-		// create new storeys
-		floorProcessor::createStoreys(hFiles[i], usedElevations);
-		
-		// match objects to new storeys
-		floorProcessor::sortObjects(hFiles[i]);
+		std::cout << "\nContinue with sorting process?(Y/N): ";
+
+		if (yesNoQuestion()) { std::cout << std::endl; floorProcessor::processStoreys(hFiles, usedElevations); }
 
 	}
+	std::cout << std::endl;
+
+	// create new storeys and sort all object into them
+	
+
+	// create new rooms
 
 	//TODO room detection and check
 	//TODO room creation

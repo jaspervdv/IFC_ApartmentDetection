@@ -229,7 +229,15 @@ std::vector<double> floorProcessor::getStoreyElevations(helper* data)
 	return storeyElevation;
 }
 
-std::vector<double> floorProcessor::getFloorElevations(helper* data)
+std::vector<double> floorProcessor::getStoreyElevations(std::vector<helper*> data)
+{
+	for (size_t i = 0; i < data.size(); i++)
+	{
+		if (data[i]->getIsConstruct() || !data[i]->getDepending()) { return floorProcessor::getStoreyElevations(data[i]); }
+	}
+}
+
+std::vector<double> floorProcessor::computeFloorElevations(helper* data)
 {
 	// get the top faces of the floors
 	std::vector< TopoDS_Shape> floorShapes = floorProcessor::getSlabShapes(data);
@@ -474,6 +482,23 @@ std::vector<double> floorProcessor::getFloorElevations(helper* data)
 	return computedElev;
 }
 
+std::vector<double> floorProcessor::computeFloorElevations(std::vector<helper*> data)
+{
+	for (size_t i = 0; i < data.size(); i++)
+	{
+		if (data[i]->getIsConstruct() || !data[i]->getDepending())
+		{
+			std::vector<double> tempFloorElevation = floorProcessor::computeFloorElevations(data[i]);
+
+			if (tempFloorElevation.size() != 0) { return tempFloorElevation; }
+			else {
+				std::cout << "[WARNING] No storey elevations can be found in the supplied IFC file!" << std::endl;
+				break;
+			}
+		}
+	}
+}
+
 bool floorProcessor::compareElevations(std::vector<double> elevations, std::vector<double> floors)
 {
 	bool sameSize = false;
@@ -493,6 +518,20 @@ bool floorProcessor::compareElevations(std::vector<double> elevations, std::vect
 	{
 		//std::cout << "- " << floors.size() << " floors detected, " << elevations.size() << " storeys placed." << std::endl;
 		return false;
+	}
+}
+
+void floorProcessor::processStoreys(std::vector<helper*> data, std::vector<double> elevations)
+{
+	for (size_t i = 0; i < data.size(); i++)
+	{
+		// wipe storeys
+		floorProcessor::cleanStoreys(data[i]);
+		// create new storeys
+		floorProcessor::createStoreys(data[i], elevations);
+
+		// match objects to new storeys
+		floorProcessor::sortObjects(data[i]);
 	}
 }
 
@@ -577,6 +616,8 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 
 void floorProcessor::sortObjects(helper* data)
 {
+	std::cout << "[INFO] Storey sorting file " << data->getName() << std::endl;
+
 	IfcParse::IfcFile*  sourcefile = data->getSourceFile();
 	auto kernel = data->getKernel();
 	double lengthMulti = data->getUnits()[0];
