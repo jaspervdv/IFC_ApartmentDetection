@@ -1,6 +1,8 @@
 #define IfcSchema Ifc2x3
 #include "helper.h"
 
+#include <memory>
+
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
 
@@ -8,7 +10,6 @@
 #include <BRepGProp.hxx>
 
 #include <ifcparse/IfcFile.h>
-//#include <ifcparse/IfcHierarchyHelper.h>
 #include <ifcgeom/IfcGeom.h>
 #include <ifcgeom/IfcGeomRepresentation.h>
 #include <ifcgeom_schema_agnostic/kernel.h>

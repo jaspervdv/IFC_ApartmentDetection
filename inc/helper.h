@@ -9,8 +9,33 @@
 #include <ifcgeom/IfcGeomRepresentation.h>
 #include <ifcgeom_schema_agnostic/kernel.h>
 
+#include <memory>
+
 #ifndef HELPER_HELPER_H
 #define HELPER_HELPER_H
+
+/*class helperCluster
+{
+private:
+	gp_Pnt lllPoint_;
+	gp_Pnt urrPoint_;
+
+	gp_Vec originDir_ = gp_Vec(0,0,0);
+
+	std::vector<helper*> helperList;
+
+public:
+	std::vector<helper*> getHelper() const { return helperList; }
+
+	gp_Pnt getLllPoint() const { return lllPoint_; }
+	gp_Pnt getUrrPoint() const { return urrPoint_; }
+	gp_Vec getDirection() const { return originDir_; }
+
+	void appendHelper(std::string path);
+	void appendHelper(helper* data);
+
+};
+*/
 
 class helper
 {
@@ -25,6 +50,12 @@ private:
 	bool isConstruct = false; //TODO implement
 	bool isPartial = false;
 
+	gp_Pnt lllPoint_;
+	gp_Pnt urrPoint_;
+
+	// The needed rotation for the model to be aligned to the world axis!
+	double originRot_;
+
 	std::string path_;
 	std::string fileName_;
 
@@ -36,6 +67,8 @@ private:
 
 	// sets the unit multipliers to allow for the use of other units than metres
 	void setUnits(IfcParse::IfcFile* file);
+
+	void internalizeGeo();
 
 public:
 	
@@ -95,6 +128,8 @@ public:
 	void writeToFile(std::string path);
 
 	void setDepending(bool i) { isPartial = i; }
+
+	~helper() {};
 
 };
 

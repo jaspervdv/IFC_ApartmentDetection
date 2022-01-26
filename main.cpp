@@ -42,10 +42,12 @@ std::vector<std::string> GetSources() {
 
 	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
+	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
-	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
-	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc"//,
+	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
+	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
 	};
 
 	return sourcePathArray;
@@ -117,6 +119,8 @@ int main(int argc, char** argv) {
 		exportPathArray.emplace_back(exportPath);
 	}
 
+
+
 	int constructionIndx = -1;
 
 	// get construction model num from user
@@ -165,11 +169,14 @@ int main(int argc, char** argv) {
 		std::cout << "Parsing file " << sourcePathArray[i] << std::endl;
 		helper* h = new helper(sourcePathArray[i]);
 		
-		if (sourcePathArray.size() > 1) { h->setDepending(true); }
-		if (!h->hasSetUnits()) { return 0; }
+		if (sourcePathArray.size() > 1) { 
+			h->setDepending(true); 
 
-		// set the construction model
-		if (i == constructionIndx) { h->setIsConstruct(true); }
+			// set the construction model
+			if (i == constructionIndx) { h->setIsConstruct(true); }
+		}
+		else { h->setIsConstruct(true); }
+		if (!h->hasSetUnits()) { return 0; }
 		h->setName(fileNames[i]);		
 
 		hFiles.emplace_back(h);
@@ -198,12 +205,17 @@ int main(int argc, char** argv) {
 	{
 		std::cout << "\nContinue with sorting process?(Y/N): ";
 
-		if (yesNoQuestion()) { std::cout << std::endl; floorProcessor::processStoreys(hFiles, usedElevations); }
+		if (yesNoQuestion()) 
+		{ 
+			// create new storeys and sort all object into them
+			std::cout << std::endl; 
+			floorProcessor::processStoreys(hFiles, usedElevations); 
+		}
 
 	}
 	std::cout << std::endl;
 
-	// create new storeys and sort all object into them
+
 	
 
 	// create new rooms

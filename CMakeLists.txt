@@ -49,6 +49,7 @@ add_executable(${PROJECT_NAME}
 main.cpp
 inc/helper.cpp
 inc/floorProcessor.cpp
+inc/roomProcessor.cpp
 )
 
 foreach(LIB ${IFC_LIBRARIES})

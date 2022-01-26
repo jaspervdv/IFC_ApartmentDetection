@@ -1,5 +1,49 @@
 #include "helper.h"
 
+std::tuple<gp_Pnt, gp_Pnt, double> rotatedBBoxDiagonal(std::vector<gp_Pnt> pointList, double angle) {
+	
+	bool isPSet = false;
+	gp_Pnt lllPoint;
+	gp_Pnt urrPoint;
+
+	for (size_t i = 0; i < pointList.size(); i++)
+	{
+		gp_Pnt basePoint = pointList[i];
+		double pX = basePoint.X();
+		double pY = basePoint.Y();
+		double pZ = basePoint.Z();
+
+		gp_Pnt point = gp_Pnt(pX * cos(angle) - pY * sin(angle), pY * cos(angle) + pX * sin(angle), pZ);
+
+		//std::cout << basePoint.X() << ", " << basePoint.Y() << ", " << basePoint.Z() << std::endl;
+		//std::cout << point.X() << ", " << point.Y() << ", " << point.Z() << std::endl;
+
+		if (!isPSet)
+		{
+			isPSet = true;
+
+			lllPoint = point;
+			urrPoint = point;
+		}
+		else
+		{
+			if (point.X() < lllPoint.X()) { lllPoint.SetX(point.X()); }
+			if (point.Y() < lllPoint.Y()) { lllPoint.SetY(point.Y()); }
+			if (point.Z() < lllPoint.Z()) { lllPoint.SetZ(point.Z()); }
+
+			if (point.X() > urrPoint.X()) { urrPoint.SetX(point.X()); }
+			if (point.Y() > urrPoint.Y()) { urrPoint.SetY(point.Y()); }
+			if (point.Z() > urrPoint.Z()) { urrPoint.SetZ(point.Z()); }
+		}
+	}
+
+	// compute diagonal distance
+	double distance = lllPoint.Distance(urrPoint);
+
+	return std::make_tuple( lllPoint, urrPoint, distance );
+}
+
+
 helper::helper(std::string path) {
 
 	helper::findSchema(path);
@@ -21,6 +65,8 @@ helper::helper(std::string path) {
 		kernel_ = new IfcGeom::Kernel(file_);
 
 		helper::setUnits(file_);
+
+		internalizeGeo();
 	}
 }
 
@@ -149,6 +195,97 @@ void helper::setUnits(IfcParse::IfcFile *file) {
 	length_ = length;
 	area_ = area;
 	volume_ = volume;
+}
+
+void helper::internalizeGeo()
+{
+	std::cout << "Internalizing Geometry\n" << std::endl;
+
+	std::vector<gp_Pnt> pointList;
+
+
+
+	// get products
+	IfcSchema::IfcProduct::list::ptr products = file_->instances_by_type<IfcSchema::IfcProduct>();
+
+	for (auto it = products->begin(); it != products->end(); ++it) {
+
+		IfcSchema::IfcProduct* product = *it;
+
+		if (!product->hasRepresentation()) { continue; }
+		if (product->data().type()->name() == "IfcSite") { continue; }
+
+		auto representations = product->Representation()->Representations();
+
+		gp_Trsf trsf;
+		kernel_->convert_placement(product->ObjectPlacement(), trsf);
+
+		for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
+			const IfcSchema::IfcRepresentation* representation = *et;
+
+			std::string geotype = representation->data().getArgument(2)->toString();
+			if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
+
+			IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
+
+			// data is never deleted, can be used later as internalized data
+			std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel_->convert(representationItems));
+
+			// move to OpenCASCADE
+			const TopoDS_Shape rShape = ob.get()->at(0).Shape();
+			const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+
+
+			TopExp_Explorer expl;
+			for (expl.Init(aShape, TopAbs_VERTEX); expl.More(); expl.Next())
+			{
+				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+				pointList.emplace_back(BRep_Tool::Pnt(vertex));
+			}
+		}
+	}
+	
+	// approximate smalles bbox
+	double angle = 22.5 * (M_PI / 180);
+	double rotation = 0;
+	int maxIt = 15;
+
+	// set data for a bbox
+	auto base = rotatedBBoxDiagonal(pointList, rotation);
+	gp_Pnt lllPoint = std::get<0>(base);
+	gp_Pnt urrPoint = std::get<1>(base);
+	double smallestDistance = std::get<2>(base);
+
+	for (size_t i = 0; i < maxIt; i++)
+	{
+		std::tuple<gp_Pnt, gp_Pnt, double> left;
+		std::tuple<gp_Pnt, gp_Pnt, double> right;
+
+		left = rotatedBBoxDiagonal(pointList, rotation - angle);
+		right = rotatedBBoxDiagonal(pointList, rotation + angle);
+	
+		if (std::get<2>(left) > std::get<2>(right) && smallestDistance > std::get<2>(right))
+		{ 
+			rotation = rotation + angle; 
+			smallestDistance = std::get<2>(right);
+			lllPoint = std::get<0>(right);
+			urrPoint = std::get<1>(right);
+		}
+		else  if (smallestDistance > std::get<2>(left))
+		{ 
+			rotation = rotation - angle;
+			smallestDistance = std::get<2>(left);
+			lllPoint = std::get<0>(left);
+			urrPoint = std::get<1>(left);
+		}
+		
+		//make angle smaller
+		angle = angle / 2;
+	}
+
+	lllPoint_ = lllPoint;
+	urrPoint_ = urrPoint;
+	originRot_ = rotation;
 }
 
 IfcSchema::IfcOwnerHistory* helper::getHistory()

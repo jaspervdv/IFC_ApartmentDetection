@@ -642,6 +642,7 @@ void floorProcessor::sortObjects(helper* data)
 		);
 	}
 
+
 	std::sort(pairedContainers.begin(), pairedContainers.end());
 
 	// get the elevation of all product in the model
@@ -654,6 +655,7 @@ void floorProcessor::sortObjects(helper* data)
 		if (!product->hasRepresentation()) { continue; }
 		if (product->data().type()->name() == "IfcSite") { continue; }
 
+		
 		bool heightFound = false;
 
 		auto representations = product->Representation()->Representations();
@@ -746,10 +748,12 @@ void floorProcessor::sortObjects(helper* data)
 						geotype == "'Clipping'") {
 
 						IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-						auto ob = kernel->convert(representationItems);
 
+						//IfcGeom::IfcRepresentationShapeItems ob(kernel->convert(representationItems));
+						std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel->convert(representationItems));
+						
 						// move to OpenCASCADE
-						const TopoDS_Shape rShape = ob[0].Shape();
+						const TopoDS_Shape rShape = ob.get()->at(0).Shape();
 						const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
 
 						// set variables for top face selection
@@ -767,6 +771,7 @@ void floorProcessor::sortObjects(helper* data)
 							if (faceHeight < lowHeight) { lowHeight = faceHeight; }
 						}
 						height = lowHeight;
+
 						break;
 					}
 				}
@@ -794,20 +799,24 @@ void floorProcessor::sortObjects(helper* data)
 		}
 
 		std::get<2>(pairedContainers[indxSmallestDistance])->push(product);
+
 	}
 
 	for (size_t i = 0; i < pairedContainers.size(); i++)
 	{
 		auto currentTuple = pairedContainers[i];
 		std::get<1>(currentTuple)->setRelatedElements(std::get<2>(currentTuple));
+		//*/
 	}
+
+
 }
 
 floorProcessor::FloorStruct::FloorStruct(TopoDS_Face face, double area)
 {
 	face_ = face;
 	hasFace = true;
-
+		
 	isFlat_ = true;
 	hasFlatness = true;
 
