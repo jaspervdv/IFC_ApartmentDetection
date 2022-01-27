@@ -787,7 +787,7 @@ void floorProcessor::sortObjects(helper* data)
 			auto currentTuple = pairedContainers[i];
 			double distance = height * lengthMulti - std::get<0>(currentTuple);
 			
-			if (distance < 0) { break; }
+			if (distance < - 0 * lengthMulti) { break; }
 
 			if (distance < smallestDistance)
 			{
@@ -806,7 +806,6 @@ void floorProcessor::sortObjects(helper* data)
 	{
 		auto currentTuple = pairedContainers[i];
 		std::get<1>(currentTuple)->setRelatedElements(std::get<2>(currentTuple));
-		//*/
 	}
 
 

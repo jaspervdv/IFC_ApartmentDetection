@@ -1,5 +1,17 @@
 #include "helper.h"
 
+void printPoint(gp_Pnt p) {
+	std::cout << p.X() << ", " << p.Y() << ", " << p.Z() << ", " << std::endl;
+}
+
+gp_Pnt rotatePointWorld(gp_Pnt p, double angle) {
+	double pX = p.X();
+	double pY = p.Y();
+	double pZ = p.Z();
+
+	return gp_Pnt(pX * cos(angle) - pY * sin(angle), pY * cos(angle) + pX * sin(angle), pZ);
+}
+
 std::tuple<gp_Pnt, gp_Pnt, double> rotatedBBoxDiagonal(std::vector<gp_Pnt> pointList, double angle) {
 	
 	bool isPSet = false;
@@ -8,15 +20,7 @@ std::tuple<gp_Pnt, gp_Pnt, double> rotatedBBoxDiagonal(std::vector<gp_Pnt> point
 
 	for (size_t i = 0; i < pointList.size(); i++)
 	{
-		gp_Pnt basePoint = pointList[i];
-		double pX = basePoint.X();
-		double pY = basePoint.Y();
-		double pZ = basePoint.Z();
-
-		gp_Pnt point = gp_Pnt(pX * cos(angle) - pY * sin(angle), pY * cos(angle) + pX * sin(angle), pZ);
-
-		//std::cout << basePoint.X() << ", " << basePoint.Y() << ", " << basePoint.Z() << std::endl;
-		//std::cout << point.X() << ", " << point.Y() << ", " << point.Z() << std::endl;
+		gp_Pnt point = rotatePointWorld(pointList[i], angle);
 
 		if (!isPSet)
 		{
@@ -65,8 +69,6 @@ helper::helper(std::string path) {
 		kernel_ = new IfcGeom::Kernel(file_);
 
 		helper::setUnits(file_);
-
-		internalizeGeo();
 	}
 }
 
@@ -106,6 +108,50 @@ void helper::findSchema(std::string path) {
 	infile.close();
 }
 
+
+std::vector<gp_Pnt> helper::getAllPoints(IfcSchema::IfcProduct::list::ptr products)
+{
+	std::vector<gp_Pnt> pointList;
+
+	for (auto it = products->begin(); it != products->end(); ++it) {
+
+		IfcSchema::IfcProduct* product = *it;
+
+		if (!product->hasRepresentation()) { continue; }
+		if (product->data().type()->name() == "IfcSite") { continue; }
+
+		auto representations = product->Representation()->Representations();
+
+		gp_Trsf trsf;
+		kernel_->convert_placement(product->ObjectPlacement(), trsf);
+
+		for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
+			const IfcSchema::IfcRepresentation* representation = *et;
+
+			std::string geotype = representation->data().getArgument(2)->toString();
+			if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
+
+			IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
+
+			// data is never deleted, can be used later as internalized data
+			std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel_->convert(representationItems));
+
+			// move to OpenCASCADE
+			const TopoDS_Shape rShape = ob.get()->at(0).Shape();
+			const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+
+
+			TopExp_Explorer expl;
+			for (expl.Init(aShape, TopAbs_VERTEX); expl.More(); expl.Next())
+			{
+				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+				pointList.emplace_back(BRep_Tool::Pnt(vertex));
+			}
+		}
+	}
+
+	return pointList;
+}
 
 bool helper::hasSetUnits() {
 	if (!length_ || !area_ || !volume_){ return false; }
@@ -199,51 +245,11 @@ void helper::setUnits(IfcParse::IfcFile *file) {
 
 void helper::internalizeGeo()
 {
-	std::cout << "Internalizing Geometry\n" << std::endl;
-
-	std::vector<gp_Pnt> pointList;
-
-
+	std::cout << "Internalizing Geometry of Construction Model\n" << std::endl;
 
 	// get products
 	IfcSchema::IfcProduct::list::ptr products = file_->instances_by_type<IfcSchema::IfcProduct>();
-
-	for (auto it = products->begin(); it != products->end(); ++it) {
-
-		IfcSchema::IfcProduct* product = *it;
-
-		if (!product->hasRepresentation()) { continue; }
-		if (product->data().type()->name() == "IfcSite") { continue; }
-
-		auto representations = product->Representation()->Representations();
-
-		gp_Trsf trsf;
-		kernel_->convert_placement(product->ObjectPlacement(), trsf);
-
-		for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
-			const IfcSchema::IfcRepresentation* representation = *et;
-
-			std::string geotype = representation->data().getArgument(2)->toString();
-			if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
-
-			IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-
-			// data is never deleted, can be used later as internalized data
-			std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel_->convert(representationItems));
-
-			// move to OpenCASCADE
-			const TopoDS_Shape rShape = ob.get()->at(0).Shape();
-			const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
-
-
-			TopExp_Explorer expl;
-			for (expl.Init(aShape, TopAbs_VERTEX); expl.More(); expl.Next())
-			{
-				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-				pointList.emplace_back(BRep_Tool::Pnt(vertex));
-			}
-		}
-	}
+	std::vector<gp_Pnt> pointList = getAllPoints(products);
 	
 	// approximate smalles bbox
 	double angle = 22.5 * (M_PI / 180);
@@ -286,6 +292,23 @@ void helper::internalizeGeo()
 	lllPoint_ = lllPoint;
 	urrPoint_ = urrPoint;
 	originRot_ = rotation;
+
+	hasGeo = true;
+}
+
+void helper::internalizeGeo(double angle) {
+	std::cout << "Internalizing Geometry\n" << std::endl;
+
+	IfcSchema::IfcProduct::list::ptr products = file_->instances_by_type<IfcSchema::IfcProduct>();
+	std::vector<gp_Pnt> pointList = getAllPoints(products);
+
+	auto bbox = rotatedBBoxDiagonal(pointList, angle);
+
+	lllPoint_ = std::get<0>(bbox);
+	urrPoint_ = std::get<1>(bbox);
+	originRot_ = angle;
+
+	hasGeo = true;
 }
 
 IfcSchema::IfcOwnerHistory* helper::getHistory()
@@ -313,4 +336,80 @@ void helper::writeToFile(std::string path)
 	storageFile << *file_;
 	std::cout << "[INFO] Exported succesfully" << std::endl;
 	storageFile.close();
+}
+
+void helperCluster::internaliseData()
+{
+
+	bool debug = true;
+
+	if (!helperList[0]->getDepending())
+	{
+		helperList[0]->internalizeGeo();
+
+		lllPoint_ = helperList[0]->getLllPoint();
+		urrPoint_ = helperList[0]->getUrrPoint();
+		originRot_ = helperList[0]->getRotation();
+
+		if (debug)
+		{
+			std::cout << "cluster:" << std::endl;
+			printPoint(lllPoint_);
+			printPoint(urrPoint_);
+			std::cout << originRot_ << std::endl;
+		}
+
+		return;
+	}
+
+	for (size_t i = 0; i < size_; i++)
+	{
+		auto helper = helperList[i];
+
+		if (helper->getIsConstruct())
+		{
+			helper->internalizeGeo();
+			lllPoint_ = helper->getLllPoint();
+			urrPoint_ = helper->getUrrPoint();
+			originRot_ = helper->getRotation();
+		}
+	}
+
+	for (size_t i = 0; i < size_; i++)
+	{
+		auto helper = helperList[i];
+
+		if (!helper->getHasGeo())
+		{
+			helper->internalizeGeo(originRot_);
+
+			// update bbox if needed
+			gp_Pnt addLllPoint = helper->getLllPoint();
+			gp_Pnt addUrrPoint = helper->getUrrPoint();
+
+			if (addLllPoint.X() < lllPoint_.X()) { lllPoint_.SetX(addLllPoint.X()); }
+			if (addLllPoint.Y() < lllPoint_.Y()) { lllPoint_.SetY(addLllPoint.Y()); }
+			if (addLllPoint.Z() < lllPoint_.Z()) { lllPoint_.SetZ(addLllPoint.Z()); }
+
+			if (addUrrPoint.X() > urrPoint_.X()) { urrPoint_.SetX(addUrrPoint.X()); }
+			if (addUrrPoint.Y() > urrPoint_.Y()) { urrPoint_.SetY(addUrrPoint.Y()); }
+			if (addUrrPoint.Z() > urrPoint_.Z()) { urrPoint_.SetZ(addUrrPoint.Z()); }
+		}
+	}
+
+	hasBbox_ = true;
+
+	if (debug)
+	{
+		std::cout << "cluster:" << std::endl;
+		printPoint(lllPoint_);
+		printPoint(urrPoint_);
+		std::cout << originRot_ << std::endl;
+	}
+}
+
+void helperCluster::appendHelper(helper* data)
+{
+	helperList.emplace_back(data);
+	size_++;
 }

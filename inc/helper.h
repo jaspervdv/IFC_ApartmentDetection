@@ -1,4 +1,4 @@
-#define IfcSchema Ifc2x3
+#define IfcSchema Ifc4
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -14,28 +14,43 @@
 #ifndef HELPER_HELPER_H
 #define HELPER_HELPER_H
 
-/*class helperCluster
+// Forward Decleration helper class
+class helper;
+
+class helperCluster
 {
 private:
 	gp_Pnt lllPoint_;
 	gp_Pnt urrPoint_;
+	double originRot_;
 
-	gp_Vec originDir_ = gp_Vec(0,0,0);
+	bool hasBbox_ = false;
 
 	std::vector<helper*> helperList;
+	int size_ = 0;
 
 public:
 	std::vector<helper*> getHelper() const { return helperList; }
 
 	gp_Pnt getLllPoint() const { return lllPoint_; }
 	gp_Pnt getUrrPoint() const { return urrPoint_; }
-	gp_Vec getDirection() const { return originDir_; }
+	double getDirection() const { return originRot_; }
+
+	int getSize() const { return size_; }
+
+	void internaliseData();
+
+	bool hasBbox() const { return hasBbox_; }
 
 	void appendHelper(std::string path);
 	void appendHelper(helper* data);
 
+	void makeBbox();
+
+	helper* getHelper(int i) { return helperList[i]; }
+	std::vector<helper*> getHelpers() { return helperList; }
+
 };
-*/
 
 class helper
 {
@@ -49,6 +64,7 @@ private:
 	bool hasFloors = false;
 	bool isConstruct = false; //TODO implement
 	bool isPartial = false;
+	bool hasGeo = false;
 
 	gp_Pnt lllPoint_;
 	gp_Pnt urrPoint_;
@@ -68,7 +84,7 @@ private:
 	// sets the unit multipliers to allow for the use of other units than metres
 	void setUnits(IfcParse::IfcFile* file);
 
-	void internalizeGeo();
+	std::vector<gp_Pnt> getAllPoints(IfcSchema::IfcProduct::list::ptr products);
 
 public:
 	
@@ -81,6 +97,10 @@ public:
 
 	// returns true when length, area and volume multiplier are not 0
 	bool hasSetUnits();
+
+	void internalizeGeo();
+
+	void internalizeGeo(double angle);
 
 	// returns a vector with length, area and volume multipliers
 	std::vector<double> getUnits() const { return { length_, area_, volume_ }; }
@@ -111,6 +131,14 @@ public:
 
 	bool getIsConstruct() { return isConstruct; }
 
+	bool getHasGeo() { return hasGeo; }
+
+	gp_Pnt getLllPoint() { return lllPoint_; }
+
+	gp_Pnt getUrrPoint() { return urrPoint_; }
+
+	double getRotation() { return originRot_; }
+
 	void setIsConstruct(bool b) { isConstruct = b; }
 	
 	void setPath(std::string path) { path_ = path; }
@@ -132,5 +160,6 @@ public:
 	~helper() {};
 
 };
+
 
 #endif // HELPER_HELPER_H
