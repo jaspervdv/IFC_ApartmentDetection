@@ -222,6 +222,8 @@ int main(int argc, char** argv) {
 
 	std::cout << std::endl;
 
+	voxelfield* field = new voxelfield(hCluster);
+
 
 	//TODO room detection and check
 	//TODO room creation
