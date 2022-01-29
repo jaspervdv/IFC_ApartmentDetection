@@ -222,7 +222,14 @@ int main(int argc, char** argv) {
 
 	std::cout << std::endl;
 
+	for (size_t i = 0; i < hCluster->getSize(); i++)
+	{
+		hCluster->getHelper(i)->indexGeo();
+	}
+
 	voxelfield* field = new voxelfield(hCluster);
+	field->makeRooms(hCluster);
+
 
 
 	//TODO room detection and check

@@ -2,6 +2,8 @@
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
+#include <boost/geometry.hpp>
+#include <boost/geometry/index/rtree.hpp>
 
 #include <ifcparse/IfcFile.h>
 #include <ifcparse/IfcHierarchyHelper.h>
@@ -10,6 +12,9 @@
 #include <ifcgeom_schema_agnostic/kernel.h>
 
 #include <memory>
+
+namespace bg = boost::geometry;
+namespace bgi = boost::geometry::index;
 
 #ifndef HELPER_HELPER_H
 #define HELPER_HELPER_H
@@ -62,7 +67,7 @@ private:
 	double volume_ = 0;
 
 	bool hasFloors = false;
-	bool isConstruct = false; //TODO implement
+	bool isConstruct = false; 
 	bool isPartial = false;
 	bool hasGeo = false;
 
@@ -78,13 +83,22 @@ private:
 	IfcParse::IfcFile* file_;
 	IfcGeom::Kernel* kernel_;
 
+	bgi::rtree<std::pair<bg::model::box<bg::model::point<float, 3, bg::cs::cartesian>>, const IfcSchema::IfcProduct*>, bgi::rstar<25>> index_;
+
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
 
 	// sets the unit multipliers to allow for the use of other units than metres
 	void setUnits(IfcParse::IfcFile* file);
 
+	// returns a list of all the points present in a model
 	std::vector<gp_Pnt> getAllPoints(IfcSchema::IfcProduct::list::ptr products);
+
+	// returns a bbox of a ifcproduct that functions with boost
+	bg::model::box < bg::model::point<float, 3, bg::cs::cartesian>> makeObjectBox(const IfcSchema::IfcProduct* product);
+
+	template <typename T>
+	void addObjectToIndex(T object);
 
 public:
 	
@@ -98,9 +112,14 @@ public:
 	// returns true when length, area and volume multiplier are not 0
 	bool hasSetUnits();
 
+	// internalises the geometry while approximating a smallest bbox around the geometry
 	void internalizeGeo();
 
+	// internalises the geometry while creating a bbox with one axis along the give angle
 	void internalizeGeo(double angle);
+
+	// makes a spatial index for the geometry
+	void indexGeo();
 
 	// returns a vector with length, area and volume multipliers
 	std::vector<double> getUnits() const { return { length_, area_, volume_ }; }
@@ -138,6 +157,8 @@ public:
 	gp_Pnt getUrrPoint() { return urrPoint_; }
 
 	double getRotation() { return originRot_; }
+
+	const bgi::rtree<std::pair<bg::model::box<bg::model::point<float, 3, bg::cs::cartesian>>, const IfcSchema::IfcProduct*>, bgi::rstar<25>>* getIndexPointer() { return &index_; }
 
 	void setIsConstruct(bool b) { isConstruct = b; }
 	

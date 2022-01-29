@@ -14,8 +14,14 @@
 class voxel {
 private:
 	bool isIntersecting = false;
-	
+	bg::model::point<float, 3, bg::cs::cartesian> center_;
+	float size_;
+
 public:
+
+	explicit voxel(bg::model::point<float, 3, bg::cs::cartesian> center, double size);
+
+	bg::model::box<bg::model::point<float, 3, bg::cs::cartesian>> getVoxelGeo();
 
 	void checkIntersecting();
 
@@ -32,17 +38,23 @@ private:
 	double zRange_;
 
 	// relative space data
-	double xRelRange_;
-	double yRelRange_;
-	double zRelRange_;
+	int xRelRange_;
+	int yRelRange_;
+	int zRelRange_;
 
-	std::vector<double> voxelSize_ = { 0.0, 0.0, 0.0 };
+	int totalVoxels_;
 
-	double desiredVSize_ = 1;
+	// x y z size of the voxel
+	double voxelSize_ = 1;
+
+	bg::model::point<float, 3, bg::cs::cartesian> relPointToWorld(bg::model::point<float, 3, bg::cs::cartesian> p);
+	bg::model::point<float, 3, bg::cs::cartesian> relPointToWorld(int px, int py, int pz);
+
+	bg::model::point<float, 3, bg::cs::cartesian> WorldPointToRel(bg::model::point<float, 3, bg::cs::cartesian> p);
 
 public:
 
 	explicit voxelfield(helperCluster* cluster);
 
-	static void makeRooms(helperCluster* cluster, voxelfield field);
+	void makeRooms(helperCluster* cluster);
 };

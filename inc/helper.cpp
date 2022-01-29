@@ -47,6 +47,47 @@ std::tuple<gp_Pnt, gp_Pnt, double> rotatedBBoxDiagonal(std::vector<gp_Pnt> point
 	return std::make_tuple( lllPoint, urrPoint, distance );
 }
 
+std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, IfcGeom::Kernel* kernel) {
+	std::vector<gp_Pnt> pointList;
+
+	if (!product->hasRepresentation()) { return { gp_Pnt(0.0, 0.0, 0.0) }; }
+
+	auto representations = product->Representation()->Representations();
+
+	gp_Trsf trsf;
+	kernel->convert_placement(product->ObjectPlacement(), trsf);
+
+	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
+		const IfcSchema::IfcRepresentation* representation = *et;
+
+		std::string geotype = representation->data().getArgument(2)->toString();
+		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
+
+		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
+
+		// data is never deleted, can be used later as internalized data
+		std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel->convert(representationItems));
+
+		// move to OpenCASCADE
+		const TopoDS_Shape rShape = ob.get()->at(0).Shape();
+		const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+
+
+		TopExp_Explorer expl;
+		for (expl.Init(aShape, TopAbs_VERTEX); expl.More(); expl.Next())
+		{
+			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+			pointList.emplace_back(BRep_Tool::Pnt(vertex));
+		}
+	}
+
+	return pointList;
+}
+
+bg::model::point<float, 3, bg::cs::cartesian > Point3DOTB(gp_Pnt oP){
+	return bg::model::point<float, 3, bg::cs::cartesian >(oP.X(), oP.Y(), oP.Z());
+}
+
 
 helper::helper(std::string path) {
 
@@ -120,34 +161,9 @@ std::vector<gp_Pnt> helper::getAllPoints(IfcSchema::IfcProduct::list::ptr produc
 		if (!product->hasRepresentation()) { continue; }
 		if (product->data().type()->name() == "IfcSite") { continue; }
 
-		auto representations = product->Representation()->Representations();
-
-		gp_Trsf trsf;
-		kernel_->convert_placement(product->ObjectPlacement(), trsf);
-
-		for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
-			const IfcSchema::IfcRepresentation* representation = *et;
-
-			std::string geotype = representation->data().getArgument(2)->toString();
-			if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
-
-			IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-
-			// data is never deleted, can be used later as internalized data
-			std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel_->convert(representationItems));
-
-			// move to OpenCASCADE
-			const TopoDS_Shape rShape = ob.get()->at(0).Shape();
-			const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
-
-
-			TopExp_Explorer expl;
-			for (expl.Init(aShape, TopAbs_VERTEX); expl.More(); expl.Next())
-			{
-				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-				pointList.emplace_back(BRep_Tool::Pnt(vertex));
-			}
-		}
+		std::vector<gp_Pnt> temp = getObjectPoints(*it, kernel_);
+		for (size_t i = 0; i < temp.size(); i++) { pointList.emplace_back(temp[i]); }
+		temp.clear();
 	}
 
 	return pointList;
@@ -310,6 +326,60 @@ void helper::internalizeGeo(double angle) {
 
 	hasGeo = true;
 }
+
+void helper::indexGeo()
+{
+	// this indexing is done based on the rotated bboxes of the objects
+	// the bbox does thus comply with the model bbox but not with the actual objects original location
+
+	// add the walls to the rtree
+	addObjectToIndex<IfcSchema::IfcWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcWall>());
+
+	// add the columns to the rtree
+	addObjectToIndex<IfcSchema::IfcColumn::list::ptr>(file_->instances_by_type<IfcSchema::IfcColumn>());
+
+	// add the floorslabs to the rtree
+	addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
+
+	// add the beams to the rtree
+	addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());
+
+	// add the curtain walls to the rtree
+	addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
+
+	// add doors to the rtree (for the appartment detection)
+	addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+}
+
+bg::model::box < bg::model::point<float, 3, bg::cs::cartesian>> helper::makeObjectBox(const IfcSchema::IfcProduct* product)
+{
+
+	std::vector<gp_Pnt> productVert = getObjectPoints(product, kernel_);
+
+	if (!productVert.size() > 1) { return bg::model::box < bg::model::point<float, 3, bg::cs::cartesian> >({ 0,0,0 }, { 0,0,0 }); }
+
+	// only outputs 2 corners of the three needed corners!
+	auto box = rotatedBBoxDiagonal(productVert, originRot_);
+
+	bg::model::point<float, 3, bg::cs::cartesian > boostlllpoint = Point3DOTB(std::get<0>(box));
+	bg::model::point<float, 3, bg::cs::cartesian > boosturrpoint = Point3DOTB(std::get<1>(box));
+
+	return bg::model::box < bg::model::point<float, 3, bg::cs::cartesian> >(boostlllpoint, boosturrpoint);
+}
+
+template <typename T>
+void helper::addObjectToIndex(T object) {
+	// add doors to the rtree (for the appartment detection)
+	for (auto it = object->begin(); it != object->end(); ++it) {
+		bg::model::box < bg::model::point<float, 3, bg::cs::cartesian>> box = makeObjectBox(*it);
+		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
+			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
+			continue;
+		}
+		index_.insert(std::make_pair(box, *it));
+	}
+}
+
 
 IfcSchema::IfcOwnerHistory* helper::getHistory()
 {

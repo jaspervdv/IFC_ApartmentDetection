@@ -70,6 +70,7 @@ private:
 		
 		// Merge a group into the struct and update all the varables 
 		void mergeGroup(FloorGroupStruct* group);
+
 	};
 
 	static double getMedian(std::vector<double> l);
