@@ -1,21 +1,30 @@
 #include "roomProcessor.h"
 
-bg::model::point<float, 3, bg::cs::cartesian> voxelfield::relPointToWorld(bg::model::point<float, 3, bg::cs::cartesian> p)
-{
-	float xCoord = bg::get<0>(p) * voxelSize_ + voxelSize_ / 2;
-	float yCoord = bg::get<1>(p) * voxelSize_ + voxelSize_ / 2;
-	float zCoord = bg::get<2>(p) * voxelSize_ + voxelSize_ / 2;
+template<typename T>
+T voxelfield::linearToRelative(int i) {
+	double x = i % xRelRange_;
+	double z = i / (xRelRange_ * yRelRange_) - i / (xRelRange_ * yRelRange_) % 1;
+	double y = (i - x) / xRelRange_ - z * yRelRange_;
 
-	return bg::model::point<float, 3, bg::cs::cartesian>(xCoord, yCoord, zCoord);
+	return T(x, z, y);
 }
 
-bg::model::point<float, 3, bg::cs::cartesian> voxelfield::relPointToWorld(int px, int py, int pz)
+BoostPoint3D voxelfield::relPointToWorld(BoostPoint3D p)
+{
+	float xCoord = anchor_.X() + (bg::get<0>(p) * voxelSize_);
+	float yCoord = anchor_.Y() + (bg::get<1>(p) * voxelSize_);
+	float zCoord = anchor_.Z() + (bg::get<2>(p) * voxelSize_);
+
+	return BoostPoint3D(xCoord, yCoord, zCoord);
+}
+
+BoostPoint3D voxelfield::relPointToWorld(int px, int py, int pz)
 {
 	float xCoord = px * voxelSize_ + voxelSize_ / 2;
 	float yCoord = py * voxelSize_ + voxelSize_ / 2;
 	float zCoord = pz * voxelSize_ + voxelSize_ / 2;
 
-	return bg::model::point<float, 3, bg::cs::cartesian>(xCoord, yCoord, zCoord);
+	return BoostPoint3D(xCoord, yCoord, zCoord);
 }
 
 voxelfield::voxelfield(helperCluster* cluster)
@@ -33,9 +42,17 @@ voxelfield::voxelfield(helperCluster* cluster)
 	zRelRange_ = ceil(zRange_ / voxelSize_);
 
 	totalVoxels_ = xRelRange_ * yRelRange_ * zRelRange_;
+	Assignment = std::vector<int>(totalVoxels_, 0);
 
 	if (false)
 	{
+		std::cout << "cluster debug:" << std::endl;
+
+		std::cout << anchor_.X() << std::endl;
+		std::cout << anchor_.Y() << std::endl;
+		std::cout << anchor_.Z() << std::endl;
+
+
 		std::cout << xRange_ << std::endl;
 		std::cout << yRange_ << std::endl;
 		std::cout << zRange_ << std::endl;
@@ -48,55 +65,46 @@ voxelfield::voxelfield(helperCluster* cluster)
 
 void voxelfield::makeRooms(helperCluster* cluster)
 {
-
-	//std::vector<bgi::rtree<std::pair<bg::model::box<bg::model::point<float, 3, bg::cs::cartesian>>, const IfcSchema::IfcProduct*>, bgi::rstar<25>>*> indexRef;
-
-	//for (size_t i = 0; i < cluster->getSize(); i++) { indexRef.emplace_back(cluster->getHelper(i)->getIndexPointer()); }
-
-	std::cout << xRelRange_ << std::endl;
-	std::cout << yRelRange_ << std::endl;
-	std::cout << zRelRange_ << std::endl;
+	int cSize = cluster->getSize();
 
 	for (size_t i = 0; i < totalVoxels_; i++)
 	{
-		double x = i % xRelRange_;
-		double z = i / (xRelRange_ * yRelRange_) - i / (xRelRange_ * yRelRange_) % 1;
-		double y =  (i  - x) / xRelRange_ - z * yRelRange_;
-	}
+		auto midPoint = relPointToWorld(linearToRelative<BoostPoint3D>(i));
+		voxel boxel(midPoint, voxelSize_);
 
+		auto boxelGeo = boxel.getVoxelGeo();
 
-	for (size_t i = 0; i < xRelRange_; i++)
-	{
-		for (size_t j = 0; j < yRelRange_; j++)
+		std::vector<Value> qResult;
+
+		auto mi = boxelGeo.min_corner();
+		auto m2 = boxelGeo.max_corner();
+		//std::cout << bg::get<0>(mi) << ", " << bg::get<1>(mi) << ", " << bg::get<2>(mi) << ", " << std::endl;
+		//std::cout << bg::get<0>(m2) << ", " << bg::get<1>(m2) << ", " << bg::get<2>(m2) << ", " << std::endl;
+
+		// find potential intersecting objects
+		for (size_t i = 0; i < cSize; i++)
 		{
-			for (size_t k = 0; k < zRelRange_; k++)
-			{
-				auto midPoint = relPointToWorld(i, j, k);
-				voxel boxel(midPoint, voxelSize_);
-
-				auto boxelGeo = boxel.getVoxelGeo();
-
-
-				//TODO make query
-			}
+			auto indx = cluster->getHelper(i)->getIndexPointer();
+			indx->query(bgi::intersects(boxelGeo), std::back_inserter(qResult));
 		}
+
+		// check for actual intersection 
+
 	}
-
-
 }
 
-voxel::voxel(bg::model::point<float, 3, bg::cs::cartesian> center, double size)
+voxel::voxel(BoostPoint3D center, double size)
 {
 	size_ = size;
 	center_ = center;
 }
 
-bg::model::box<bg::model::point<float, 3, bg::cs::cartesian>> voxel::getVoxelGeo()
+bg::model::box<BoostPoint3D> voxel::getVoxelGeo()
 {
 	float offset = size_ / 2;
 
 	bg::model::point<float, 3, bg::cs::cartesian > lll (bg::get<0>(center_) - offset, bg::get<1>(center_) - offset, bg::get<2>(center_) - offset);
 	bg::model::point<float, 3, bg::cs::cartesian > urr(bg::get<0>(center_) + offset, bg::get<1>(center_) + offset, bg::get<2>(center_) + offset);
 	
-	return bg::model::box<bg::model::point<float, 3, bg::cs::cartesian>>(lll, urr);
+	return bg::model::box<BoostPoint3D>(lll, urr);
 }

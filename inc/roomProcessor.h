@@ -14,14 +14,14 @@
 class voxel {
 private:
 	bool isIntersecting = false;
-	bg::model::point<float, 3, bg::cs::cartesian> center_;
+	BoostPoint3D center_;
 	float size_;
 
 public:
 
-	explicit voxel(bg::model::point<float, 3, bg::cs::cartesian> center, double size);
+	explicit voxel(BoostPoint3D center, double size);
 
-	bg::model::box<bg::model::point<float, 3, bg::cs::cartesian>> getVoxelGeo();
+	bg::model::box<BoostPoint3D> getVoxelGeo();
 
 	void checkIntersecting();
 
@@ -47,10 +47,17 @@ private:
 	// x y z size of the voxel
 	double voxelSize_ = 1;
 
-	bg::model::point<float, 3, bg::cs::cartesian> relPointToWorld(bg::model::point<float, 3, bg::cs::cartesian> p);
-	bg::model::point<float, 3, bg::cs::cartesian> relPointToWorld(int px, int py, int pz);
 
-	bg::model::point<float, 3, bg::cs::cartesian> WorldPointToRel(bg::model::point<float, 3, bg::cs::cartesian> p);
+	// -1 is intersected 0 is not assigned 1..n is room assignement;
+	std::vector<int> Assignment;
+
+	template<typename T>
+	T linearToRelative(int i);
+
+	BoostPoint3D relPointToWorld(BoostPoint3D p);
+	BoostPoint3D relPointToWorld(int px, int py, int pz);
+
+	BoostPoint3D WorldPointToRel(BoostPoint3D p);
 
 public:
 

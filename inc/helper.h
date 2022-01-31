@@ -16,6 +16,9 @@
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 
+typedef bg::model::point<float, 3, bg::cs::cartesian> BoostPoint3D;
+typedef std::pair<bg::model::box<BoostPoint3D>, IfcSchema::IfcProduct*> Value;
+
 #ifndef HELPER_HELPER_H
 #define HELPER_HELPER_H
 
@@ -83,7 +86,7 @@ private:
 	IfcParse::IfcFile* file_;
 	IfcGeom::Kernel* kernel_;
 
-	bgi::rtree<std::pair<bg::model::box<bg::model::point<float, 3, bg::cs::cartesian>>, const IfcSchema::IfcProduct*>, bgi::rstar<25>> index_;
+	bgi::rtree<Value, bgi::rstar<25>> index_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
@@ -95,7 +98,7 @@ private:
 	std::vector<gp_Pnt> getAllPoints(IfcSchema::IfcProduct::list::ptr products);
 
 	// returns a bbox of a ifcproduct that functions with boost
-	bg::model::box < bg::model::point<float, 3, bg::cs::cartesian>> makeObjectBox(const IfcSchema::IfcProduct* product);
+	bg::model::box <BoostPoint3D> makeObjectBox(const IfcSchema::IfcProduct* product);
 
 	template <typename T>
 	void addObjectToIndex(T object);
@@ -158,7 +161,7 @@ public:
 
 	double getRotation() { return originRot_; }
 
-	const bgi::rtree<std::pair<bg::model::box<bg::model::point<float, 3, bg::cs::cartesian>>, const IfcSchema::IfcProduct*>, bgi::rstar<25>>* getIndexPointer() { return &index_; }
+	const bgi::rtree<Value, bgi::rstar<25>>* getIndexPointer() { return &index_; }
 
 	void setIsConstruct(bool b) { isConstruct = b; }
 	

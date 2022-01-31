@@ -351,12 +351,12 @@ void helper::indexGeo()
 	addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
 }
 
-bg::model::box < bg::model::point<float, 3, bg::cs::cartesian>> helper::makeObjectBox(const IfcSchema::IfcProduct* product)
+bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduct* product)
 {
 
 	std::vector<gp_Pnt> productVert = getObjectPoints(product, kernel_);
 
-	if (!productVert.size() > 1) { return bg::model::box < bg::model::point<float, 3, bg::cs::cartesian> >({ 0,0,0 }, { 0,0,0 }); }
+	if (!productVert.size() > 1) { return bg::model::box < BoostPoint3D >({ 0,0,0 }, { 0,0,0 }); }
 
 	// only outputs 2 corners of the three needed corners!
 	auto box = rotatedBBoxDiagonal(productVert, originRot_);
@@ -364,14 +364,14 @@ bg::model::box < bg::model::point<float, 3, bg::cs::cartesian>> helper::makeObje
 	bg::model::point<float, 3, bg::cs::cartesian > boostlllpoint = Point3DOTB(std::get<0>(box));
 	bg::model::point<float, 3, bg::cs::cartesian > boosturrpoint = Point3DOTB(std::get<1>(box));
 
-	return bg::model::box < bg::model::point<float, 3, bg::cs::cartesian> >(boostlllpoint, boosturrpoint);
+	return bg::model::box < BoostPoint3D >(boostlllpoint, boosturrpoint);
 }
 
 template <typename T>
 void helper::addObjectToIndex(T object) {
 	// add doors to the rtree (for the appartment detection)
 	for (auto it = object->begin(); it != object->end(); ++it) {
-		bg::model::box < bg::model::point<float, 3, bg::cs::cartesian>> box = makeObjectBox(*it);
+		bg::model::box <BoostPoint3D> box = makeObjectBox(*it);
 		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
 			continue;
