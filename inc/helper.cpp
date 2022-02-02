@@ -47,47 +47,13 @@ std::tuple<gp_Pnt, gp_Pnt, double> rotatedBBoxDiagonal(std::vector<gp_Pnt> point
 	return std::make_tuple( lllPoint, urrPoint, distance );
 }
 
-std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, IfcGeom::Kernel* kernel) {
-	std::vector<gp_Pnt> pointList;
-
-	if (!product->hasRepresentation()) { return { gp_Pnt(0.0, 0.0, 0.0) }; }
-
-	auto representations = product->Representation()->Representations();
-
-	gp_Trsf trsf;
-	kernel->convert_placement(product->ObjectPlacement(), trsf);
-
-	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
-		const IfcSchema::IfcRepresentation* representation = *et;
-
-		std::string geotype = representation->data().getArgument(2)->toString();
-		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
-
-		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-
-		// data is never deleted, can be used later as internalized data
-		std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel->convert(representationItems));
-
-		// move to OpenCASCADE
-		const TopoDS_Shape rShape = ob.get()->at(0).Shape();
-		const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
-
-
-		TopExp_Explorer expl;
-		for (expl.Init(aShape, TopAbs_VERTEX); expl.More(); expl.Next())
-		{
-			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-			pointList.emplace_back(BRep_Tool::Pnt(vertex));
-		}
-	}
-
-	return pointList;
+BoostPoint3D Point3DOTB(gp_Pnt oP){
+	return BoostPoint3D(oP.X(), oP.Y(), oP.Z());
 }
 
-bg::model::point<float, 3, bg::cs::cartesian > Point3DOTB(gp_Pnt oP){
-	return bg::model::point<float, 3, bg::cs::cartesian >(oP.X(), oP.Y(), oP.Z());
+gp_Pnt Point3DBTO(BoostPoint3D oP) {
+	return gp_Pnt(bg::get<0>(oP), bg::get<1>(oP), bg::get<2>(oP));
 }
-
 
 helper::helper(std::string path) {
 
@@ -161,8 +127,12 @@ std::vector<gp_Pnt> helper::getAllPoints(IfcSchema::IfcProduct::list::ptr produc
 		if (!product->hasRepresentation()) { continue; }
 		if (product->data().type()->name() == "IfcSite") { continue; }
 
-		std::vector<gp_Pnt> temp = getObjectPoints(*it, kernel_);
-		for (size_t i = 0; i < temp.size(); i++) { pointList.emplace_back(temp[i]); }
+		std::vector<gp_Pnt> temp = getObjectPoints(product);
+		
+		if (temp.size() > 1);
+		{
+			for (size_t i = 0; i < temp.size(); i++) { pointList.emplace_back(temp[i]); }
+		}
 		temp.clear();
 	}
 
@@ -342,27 +312,27 @@ void helper::indexGeo()
 	addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
 
 	// add the beams to the rtree
-	addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());
+	//addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());
 
 	// add the curtain walls to the rtree
-	addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
+	//addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
 
 	// add doors to the rtree (for the appartment detection)
-	addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+	//addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
 }
 
 bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduct* product)
 {
 
-	std::vector<gp_Pnt> productVert = getObjectPoints(product, kernel_);
+	std::vector<gp_Pnt> productVert = getObjectPoints(product);
 
 	if (!productVert.size() > 1) { return bg::model::box < BoostPoint3D >({ 0,0,0 }, { 0,0,0 }); }
 
 	// only outputs 2 corners of the three needed corners!
 	auto box = rotatedBBoxDiagonal(productVert, originRot_);
 
-	bg::model::point<float, 3, bg::cs::cartesian > boostlllpoint = Point3DOTB(std::get<0>(box));
-	bg::model::point<float, 3, bg::cs::cartesian > boosturrpoint = Point3DOTB(std::get<1>(box));
+	BoostPoint3D boostlllpoint = Point3DOTB(std::get<0>(box));
+	BoostPoint3D boosturrpoint = Point3DOTB(std::get<1>(box));
 
 	return bg::model::box < BoostPoint3D >(boostlllpoint, boosturrpoint);
 }
@@ -389,6 +359,53 @@ IfcSchema::IfcOwnerHistory* helper::getHistory()
 	if (ownerHistories.get()->size() != 1) { std::cout << "[Warning] multiple owners objects found!" << std::endl; }
 
 	return *ownerHistories.get()->begin();
+}
+
+std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges)
+{
+	std::vector<gp_Pnt> pointList;
+
+	if (!product->hasRepresentation()) { return { gp_Pnt(0.0, 0.0, 0.0) }; }
+
+	auto representations = product->Representation()->Representations();
+
+	gp_Trsf trsf;
+	kernel_->convert_placement(product->ObjectPlacement(), trsf);
+
+	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
+		const IfcSchema::IfcRepresentation* representation = *et;
+
+		std::string geotype = representation->data().getArgument(2)->toString();
+		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
+
+		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
+
+		// data is never deleted, can be used later as internalized data
+		//std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel_->convert(representationItems));
+		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
+
+		// move to OpenCASCADE
+		const TopoDS_Shape rShape = ob.at(0).Shape();
+		const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+
+		TopExp_Explorer expl;
+		for (expl.Init(aShape, TopAbs_VERTEX); expl.More(); expl.Next())
+		{
+			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+			pointList.emplace_back(BRep_Tool::Pnt(vertex));
+		}
+	}
+
+	if (sortEdges) { return pointList; }
+
+	std::vector<gp_Pnt> pointListSmall;
+	for (size_t i = 0; i < pointList.size(); i++)
+	{
+		if (i%2 == 0) { pointListSmall.emplace_back(pointList[i]); }
+	}
+
+	return pointListSmall;
+
 }
 
 void helper::wipeObject(helper* data, int id)

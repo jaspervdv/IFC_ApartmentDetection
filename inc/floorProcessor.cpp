@@ -325,7 +325,7 @@ std::vector<double> floorProcessor::computeFloorElevations(helper* data)
 			}
 
 			// pair the vertex to create edges and compute distances
-			int maxidx = pointList.size();
+			int maxidx = (int) pointList.size();
 			for (size_t j = 0; j < maxidx; j += 2)
 			{
 				gp_Pnt p1 = pointList[j];
@@ -663,7 +663,7 @@ void floorProcessor::sortObjects(helper* data)
 		gp_Trsf trsf;
 		kernel->convert_placement(product->ObjectPlacement(), trsf);
 
-		double height;
+		double height = - 9999;
 
 		// floors are a special case due to them being placed based on their top elevation
 		
@@ -778,12 +778,14 @@ void floorProcessor::sortObjects(helper* data)
 			}
 		}
 
-		int maxidx = pairedContainers.size();
+		if (height == -9999) { return; }
+
+		int maxidx = (int) pairedContainers.size();
 
 		// vind smallest distance to floor elevation
 		double smallestDistance = 1000;
-		double indxSmallestDistance = 0;
-		for (size_t i = 0; i < maxidx; i++) {
+		int indxSmallestDistance = 0;
+		for (int i = 0; i < maxidx; i++) {
 			auto currentTuple = pairedContainers[i];
 			double distance = height * lengthMulti - std::get<0>(currentTuple);
 			

@@ -1,4 +1,4 @@
-#define IfcSchema Ifc4
+#define IfcSchema Ifc2x3
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -16,7 +16,7 @@
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 
-typedef bg::model::point<float, 3, bg::cs::cartesian> BoostPoint3D;
+typedef bg::model::point<double, 3, bg::cs::cartesian> BoostPoint3D;
 typedef std::pair<bg::model::box<BoostPoint3D>, IfcSchema::IfcProduct*> Value;
 
 #ifndef HELPER_HELPER_H
@@ -24,6 +24,15 @@ typedef std::pair<bg::model::box<BoostPoint3D>, IfcSchema::IfcProduct*> Value;
 
 // Forward Decleration helper class
 class helper;
+
+// helper functions that can be utilised everywhere
+gp_Pnt rotatePointWorld(gp_Pnt p, double angle);
+
+void printPoint(gp_Pnt p);
+
+BoostPoint3D Point3DOTB(gp_Pnt oP);
+
+gp_Pnt Point3DBTO(BoostPoint3D oP);
 
 class helperCluster
 {
@@ -162,6 +171,8 @@ public:
 	double getRotation() { return originRot_; }
 
 	const bgi::rtree<Value, bgi::rstar<25>>* getIndexPointer() { return &index_; }
+
+	std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges = false);
 
 	void setIsConstruct(bool b) { isConstruct = b; }
 	

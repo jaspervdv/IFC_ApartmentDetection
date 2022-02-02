@@ -1,5 +1,5 @@
 // TODO: Multiple schemas
-#define IfcSchema Ifc4
+#define IfcSchema Ifc2x3
 
 #include "inc/helper.h"
 #include "inc/floorProcessor.h"
@@ -42,10 +42,10 @@ std::vector<std::string> GetSources() {
 
 	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
-	"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
 	};
@@ -59,7 +59,7 @@ void compareElevationsOutput(const std::vector<double> left, const std::vector<d
 	{
 		if (left.size() > right.size())
 		{
-			int minIndx = right.size();
+			int minIndx = (int) right.size();
 			for (size_t i = 0; i < left.size(); i++)
 			{
 				if (i < minIndx) { std::cout << std::left << std::setw(tab) << left[i] << right[i] << std::endl; }
@@ -67,7 +67,7 @@ void compareElevationsOutput(const std::vector<double> left, const std::vector<d
 			}
 		}
 		else {
-			int minIndx = left.size();
+			int minIndx = (int) left.size();
 			for (size_t i = 0; i < right.size(); i++)
 			{
 				if (i < minIndx) { std::cout << std::left << std::setw(tab) << left[i] << right[i] << std::endl; }
@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
 
 	std::cout << std::endl;
 
-	for (size_t i = 0; i < hCluster->getSize(); i++)
+	for (int i = 0; i < hCluster->getSize(); i++)
 	{
 		hCluster->getHelper(i)->indexGeo();
 	}
@@ -239,7 +239,7 @@ int main(int argc, char** argv) {
 
 	// write to file
 
-	for (size_t i = 0; i < hCluster->getSize(); i++)
+	for (int i = 0; i < hCluster->getSize(); i++)
 	{
 		hCluster->getHelper(i)->writeToFile(exportPathArray[i]);
 	}
