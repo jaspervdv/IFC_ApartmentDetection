@@ -312,13 +312,13 @@ void helper::indexGeo()
 	addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
 
 	// add the beams to the rtree
-	//addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());
+	addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());
 
 	// add the curtain walls to the rtree
-	//addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
+	addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
 
 	// add doors to the rtree (for the appartment detection)
-	//addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+	addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
 }
 
 bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduct* product)
@@ -406,6 +406,44 @@ std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product
 
 	return pointListSmall;
 
+}
+
+std::vector<TopoDS_Face> helper::getObjectFaces(const IfcSchema::IfcProduct* product)
+{
+	std::vector<TopoDS_Face> faceList;
+
+	if (!product->hasRepresentation()) { return {}; }
+
+	auto representations = product->Representation()->Representations();
+
+	gp_Trsf trsf;
+	kernel_->convert_placement(product->ObjectPlacement(), trsf);
+
+	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
+		const IfcSchema::IfcRepresentation* representation = *et;
+
+		std::string geotype = representation->data().getArgument(2)->toString();
+		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
+
+		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
+
+		// data is never deleted, can be used later as internalized data
+		//std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel_->convert(representationItems));
+		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
+
+		// move to OpenCASCADE
+		const TopoDS_Shape rShape = ob.at(0).Shape();
+		const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+
+		TopExp_Explorer expl;
+		for (expl.Init(aShape, TopAbs_FACE); expl.More(); expl.Next())
+		{
+			TopoDS_Face face = TopoDS::Face(expl.Current());
+			faceList.emplace_back(face);
+		}
+	}
+
+	return faceList;
 }
 
 void helper::wipeObject(helper* data, int id)

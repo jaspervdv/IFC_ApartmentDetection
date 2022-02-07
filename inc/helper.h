@@ -174,6 +174,8 @@ public:
 
 	std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges = false);
 
+	std::vector<TopoDS_Face> getObjectFaces(const IfcSchema::IfcProduct* product);
+
 	void setIsConstruct(bool b) { isConstruct = b; }
 	
 	void setPath(std::string path) { path_ = path; }

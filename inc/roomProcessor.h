@@ -5,6 +5,9 @@
 #include <GProp_GProps.hxx>
 #include <BRepGProp.hxx>
 
+#include <BRepMesh_IncrementalMesh.hxx>
+#include <BRep_Tool.hxx>
+
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
 
@@ -14,34 +17,33 @@
 class voxel {
 private:
 	bool isIntersecting_ = false;
+	std::vector<int> roomnums = { 0 };
 	BoostPoint3D center_;
 	double size_;
 
-	// triangulated boxel indecies
-	std::vector<std::vector<int>> triangulationBoxel = {
-		{ 0, 1, 5 }, // side	
-		{ 0, 5, 6 },
-		{ 1, 2, 4 },
-		{ 1, 4, 5 },
-		{ 2, 3, 7 },
-		{ 2, 7, 4 },
-		{ 3, 0, 6 },
-		{ 3, 6, 7 },
-		{ 6, 5, 4 }, // top
-		{ 6, 4, 7 },
-		{ 0, 3, 2 }, // buttom
-		{ 0, 2, 1 }
-	};
+	std::vector<IfcSchema::IfcProduct*> intersectingProducts;
+
 public:
 
 	explicit voxel(BoostPoint3D center, double size);
 
 	bg::model::box<BoostPoint3D> getVoxelGeo();
+
 	std::vector<gp_Pnt> getCornerPoints(double angle);
+
+	std::vector<std::vector<int>> getVoxelTriangles();
+
+	std::vector<std::vector<int>> getVoxelFaces();
+
+	std::vector<IfcSchema::IfcProduct*> getProducts() { return intersectingProducts; }
+
+	void addProduct(IfcSchema::IfcProduct* product) { intersectingProducts.emplace_back(product); }
 
 	double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices);
 
-	void checkIntersecting(const IfcSchema::IfcProduct* product, helper* h, std::vector<gp_Pnt> voxelPoints);
+	bool checkIntersecting(const IfcSchema::IfcProduct* product, helper* h, std::vector<gp_Pnt> voxelPoints);
+
+	bool checkIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle);
 
 	bool getIsIntersecting() { return isIntersecting_; }
 };
@@ -60,13 +62,15 @@ private:
 	int totalVoxels_;
 
 	// x y z size of the voxel
-	double voxelSize_ = 2;
+	double voxelSize_ = 1;
 
 	double planeRotation_ = 0;
 
 	// -1 is intersected 0 is not assigned 1..n is room assignement;
 	std::vector<int> Assignment;
 	std::map<int, voxel> VoxelLookup;
+
+	std::vector<int> getNeighbours(int voxelIndx);
 
 	template<typename T>
 	T linearToRelative(int i);
