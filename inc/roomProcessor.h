@@ -1,4 +1,4 @@
-#define IfcSchema Ifc2x3
+#define IfcSchema Ifc4
 
 #include "helper.h"
 
@@ -12,7 +12,7 @@
 #include <boost/log/trivial.hpp>
 
 #include <vector>
-
+#include <tuple>
 
 class voxel {
 private:
@@ -23,27 +23,37 @@ private:
 
 	std::vector<IfcSchema::IfcProduct*> intersectingProducts;
 
-public:
-
-	explicit voxel(BoostPoint3D center, double size);
-
-	bg::model::box<BoostPoint3D> getVoxelGeo();
-
-	std::vector<gp_Pnt> getCornerPoints(double angle);
-
-	std::vector<std::vector<int>> getVoxelTriangles();
-
-	std::vector<std::vector<int>> getVoxelFaces();
-
-	std::vector<IfcSchema::IfcProduct*> getProducts() { return intersectingProducts; }
-
-	void addProduct(IfcSchema::IfcProduct* product) { intersectingProducts.emplace_back(product); }
-
+	// compute the signed volume
 	double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices);
 
-	bool checkIntersecting(const IfcSchema::IfcProduct* product, helper* h, std::vector<gp_Pnt> voxelPoints);
-
 	bool checkIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle);
+
+public:
+
+	// greates an axis aligned voxel
+	explicit voxel(BoostPoint3D center, double size);
+
+	// returns the lll and urr point of a voxel in axis aligned space
+	bg::model::box<BoostPoint3D> getVoxelGeo();
+
+	// return the cornerpoints of a voxel based on the angle
+	std::vector<gp_Pnt> getCornerPoints(double angle);
+
+	// returns integers with that comply with the getCornerPoints output
+	std::vector<std::vector<int>> getVoxelTriangles();
+	std::vector<std::vector<int>> getVoxelFaces();
+	std::vector<std::vector<int>> getVoxelEdges();
+
+	// returns the products that intersect with the voxel
+	std::vector<IfcSchema::IfcProduct*> getProducts() { return intersectingProducts; }
+
+	// add product to the voxel
+	void addProduct(IfcSchema::IfcProduct* product) { intersectingProducts.emplace_back(product); }
+
+	// check the intersection of a triangluted product and a voxel
+	bool checkIntersecting(LookupValue lookup, const std::vector<gp_Pnt> voxelPoints, helper* h);
+
+	bool linearEqIntersection(std::vector<gp_Pnt> productPoints, std::vector<gp_Pnt> voxelPoints);
 
 	bool getIsIntersecting() { return isIntersecting_; }
 };

@@ -1,4 +1,4 @@
-#define IfcSchema Ifc2x3
+#define IfcSchema Ifc4
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -17,7 +17,8 @@ namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 
 typedef bg::model::point<double, 3, bg::cs::cartesian> BoostPoint3D;
-typedef std::pair<bg::model::box<BoostPoint3D>, IfcSchema::IfcProduct*> Value;
+typedef std::pair<bg::model::box<BoostPoint3D>, int> Value;
+typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>> LookupValue;
 
 #ifndef HELPER_HELPER_H
 #define HELPER_HELPER_H
@@ -95,7 +96,8 @@ private:
 	IfcParse::IfcFile* file_;
 	IfcGeom::Kernel* kernel_;
 
-	bgi::rtree<Value, bgi::rstar<25>> index_;
+	bgi::rtree<Value, bgi::rstar<25>> index_; 
+	std::vector<LookupValue> productLookup_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
@@ -108,6 +110,8 @@ private:
 
 	// returns a bbox of a ifcproduct that functions with boost
 	bg::model::box <BoostPoint3D> makeObjectBox(const IfcSchema::IfcProduct* product);
+
+	std::vector<std::vector<gp_Pnt>> triangulateProduct(IfcSchema::IfcProduct* product);
 
 	template <typename T>
 	void addObjectToIndex(T object);
@@ -171,6 +175,8 @@ public:
 	double getRotation() { return originRot_; }
 
 	const bgi::rtree<Value, bgi::rstar<25>>* getIndexPointer() { return &index_; }
+
+	auto getLookup(int i) { return productLookup_[i]; }
 
 	std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges = false);
 

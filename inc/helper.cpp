@@ -4,6 +4,11 @@ void printPoint(gp_Pnt p) {
 	std::cout << p.X() << ", " << p.Y() << ", " << p.Z() << ", " << std::endl;
 }
 
+void printPoint(BoostPoint3D p) {
+	std::cout << bg::get<0>(p) << ", " << bg::get<1>(p) << ", " << bg::get<2>(p) << ", " << std::endl;
+}
+
+
 gp_Pnt rotatePointWorld(gp_Pnt p, double angle) {
 	double pX = p.X();
 	double pY = p.Y();
@@ -305,7 +310,7 @@ void helper::indexGeo()
 	// add the walls to the rtree
 	addObjectToIndex<IfcSchema::IfcWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcWall>());
 
-	// add the columns to the rtree
+	// add the columns to the rtree TODO sweeps
 	addObjectToIndex<IfcSchema::IfcColumn::list::ptr>(file_->instances_by_type<IfcSchema::IfcColumn>());
 
 	// add the floorslabs to the rtree
@@ -323,8 +328,16 @@ void helper::indexGeo()
 
 bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduct* product)
 {
-
 	std::vector<gp_Pnt> productVert = getObjectPoints(product);
+
+	//std::cout << endl;
+
+	//for (size_t i = 0; i < productVert.size(); i++)
+	//{
+	//	printPoint(productVert[i]);
+	//}
+
+	//std::cout << endl;
 
 	if (!productVert.size() > 1) { return bg::model::box < BoostPoint3D >({ 0,0,0 }, { 0,0,0 }); }
 
@@ -337,6 +350,35 @@ bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduc
 	return bg::model::box < BoostPoint3D >(boostlllpoint, boosturrpoint);
 }
 
+std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduct* product)
+{
+	std::vector<TopoDS_Face> faceList = getObjectFaces(product);
+	std::vector<std::vector<gp_Pnt>> triangleMeshList;
+
+	for (size_t i = 0; i < faceList.size(); i++)
+	{
+		BRepMesh_IncrementalMesh faceMesh = BRepMesh_IncrementalMesh(faceList[i], 0.004);
+
+		TopLoc_Location loc;
+		auto mesh = BRep_Tool::Triangulation(faceList[i], loc);
+		const gp_Trsf& trsf = loc.Transformation();
+
+		for (size_t j = 1; j <= mesh.get()->NbTriangles(); j++)
+		{
+			const Poly_Triangle& theTriangle = mesh->Triangles().Value(j);
+
+			std::vector<gp_Pnt> trianglePoints;
+			for (size_t k = 1; k <= 3; k++)
+			{
+				gp_Pnt p = mesh->Nodes().Value(theTriangle(k));
+				trianglePoints.emplace_back(p.Transformed(trsf));
+			}
+			triangleMeshList.emplace_back(trianglePoints);
+		}
+	}
+	return triangleMeshList;
+}
+
 template <typename T>
 void helper::addObjectToIndex(T object) {
 	// add doors to the rtree (for the appartment detection)
@@ -346,7 +388,15 @@ void helper::addObjectToIndex(T object) {
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
 			continue;
 		}
-		index_.insert(std::make_pair(box, *it));
+
+		//printPoint(box.min_corner());
+		//printPoint(box.max_corner());
+		//std::cout << std::endl;
+
+		index_.insert(std::make_pair(box, (int) index_.size()));
+		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(*it);
+		auto lookup = std::make_tuple(*it, triangleMeshList);
+		productLookup_.emplace_back(lookup);
 	}
 }
 
@@ -375,13 +425,11 @@ std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product
 	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
 		const IfcSchema::IfcRepresentation* representation = *et;
 
-		std::string geotype = representation->data().getArgument(2)->toString();
 		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
 
 		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
 
 		// data is never deleted, can be used later as internalized data
-		//std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel_->convert(representationItems));
 		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
 
 		// move to OpenCASCADE
@@ -426,9 +474,6 @@ std::vector<TopoDS_Face> helper::getObjectFaces(const IfcSchema::IfcProduct* pro
 		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
 
 		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-
-		// data is never deleted, can be used later as internalized data
-		//std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel_->convert(representationItems));
 		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
 
 		// move to OpenCASCADE
