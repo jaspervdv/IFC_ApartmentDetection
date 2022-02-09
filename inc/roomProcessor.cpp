@@ -14,13 +14,13 @@ std::vector<int> voxelfield::getNeighbours(int voxelIndx)
 	gp_Pnt loc3D = linearToRelative<gp_Pnt>(voxelIndx);
 
 	bool xSmall = loc3D.X() - 1 >= 0;
-	bool xBig = loc3D.X() + 1 <= xRelRange_;
+	bool xBig = loc3D.X() + 1 < xRelRange_;
 
 	bool ySmall = loc3D.Y() - 1 >= 0;
-	bool yBig = loc3D.Y() + 1 <= yRelRange_;
+	bool yBig = loc3D.Y() + 1 < yRelRange_;
 
 	bool zSmall = loc3D.Z() - 1 >= 0;
-	bool zBig = loc3D.Z() + 1 <= zRelRange_;
+	bool zBig = loc3D.Z() + 1 < zRelRange_;
 
 	// connectivity
 	if (xSmall) 
@@ -85,15 +85,20 @@ void voxelfield::outputFieldToFile()
 	storageFile.open("D:/Documents/Uni/Thesis/sources/Models/exports/voxels.txt", std::ios_base::app);
 	for (auto it = VoxelLookup.begin(); it != VoxelLookup.end(); ++ it )
 	{
-		std::vector<gp_Pnt> pointList =  it->second.getCornerPoints(planeRotation_);
+		std::vector<gp_Pnt> pointList = it->second->getCornerPoints(planeRotation_);
+
+		auto products = it->second->getProducts();
+
+		if (it->second->getRoomNumbers().size() == 0) { continue; }
+		if (!it->second->getIsInside()) { continue; }
 
 		for (size_t k = 0; k < pointList.size(); k++)
 		{
 			storageFile << pointList[k].X() << ", " << pointList[k].Y() << ", " << pointList[k].Z() << std::endl;
 		}
 
-		auto products = it->second.getProducts();
-		storageFile << products.size() << std::endl;
+
+		storageFile << it->second->getRoomNumbers()[0] << std::endl;
 
 		storageFile << "\n";
 	}
@@ -156,14 +161,14 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	for (int i = 0; i < totalVoxels_; i++)
 	{
 		auto midPoint = relPointToWorld(linearToRelative<BoostPoint3D>(i));
-		voxel boxel(midPoint, voxelSize_);
+		voxel* boxel = new voxel(midPoint, voxelSize_);
 
-		auto boxelGeo = boxel.getVoxelGeo();
+		auto boxelGeo = boxel->getVoxelGeo();
 
 		std::vector<Value> qResult;
 
 		// make a pointlist 0 - 3 lower ring, 4 - 7 upper ring
-		std::vector<gp_Pnt> pointList = boxel.getCornerPoints(planeRotation_);
+		std::vector<gp_Pnt> pointList = boxel->getCornerPoints(planeRotation_);
 
 		// find potential intersecting objects
 		for (int j = 0; j < cSize; j++)
@@ -178,24 +183,81 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 				if (!product->hasRepresentation()) { continue; }
 
-				if (boxel.checkIntersecting(lookup, pointList, cluster->getHelper(j)))
+				if (boxel->checkIntersecting(lookup, pointList, cluster->getHelper(j)))
 				{
-					Assignment[i] = -1;
-					boxel.addProduct(product);
+					Assignment[i] = 1;
+					boxel->addProduct(product);
 				}
 			}
 		}
-		if (boxel.getIsIntersecting())
+		VoxelLookup.emplace(i, boxel);
+	}
+
+	int roomnum = 0;
+	int c = 0;
+	for (int i = 0; i < totalVoxels_; i++)
+	{
+		if (Assignment[i] == 0) // Find unassigned voxel
 		{
-			VoxelLookup.emplace(i, boxel);
+			std::vector<int> buffer = { i };
+			std::vector<int> totalRoom = { i };
+
+			bool isOutSide = false;
+
+			while (buffer.size() > 0)
+			{
+				std::vector<int> tempBuffer;
+				for (size_t j = 0; j < buffer.size(); j++)
+				{
+					int currentIdx = buffer[j];
+
+					// assign and update voxel
+					Assignment[currentIdx] = 1;
+					voxel* currentBoxel = VoxelLookup[currentIdx];
+					currentBoxel->AddRoomNumber(roomnum);
+
+					// find neighbours
+					std::vector<int> neighbourIndx = getNeighbours(currentIdx);
+
+					if (neighbourIndx.size() < 16) { isOutSide = true; }
+
+					for (size_t k = 0; k < neighbourIndx.size(); k++)
+					{
+						// exlude if already assigned
+						if (Assignment[neighbourIndx[k]] != 0) { continue; }
+
+						bool dupli = false;
+						for (size_t l = 0; l < tempBuffer.size(); l++)
+						{
+							// exlude if already in buffer
+							if (neighbourIndx[k] == tempBuffer[l]) 
+							{ 
+								dupli = true;
+								break;
+							}
+						}
+						if (!dupli) 
+						{ 
+							tempBuffer.emplace_back(neighbourIndx[k]);
+							totalRoom.emplace_back(neighbourIndx[k]);
+						}
+					}
+				}
+				buffer = tempBuffer;
+			}
+
+			if (isOutSide)
+			{
+				for (size_t i = 0; i < totalRoom.size(); i++)
+				{
+					int currentIdx = totalRoom[i];
+					voxel* currentBoxel = VoxelLookup[currentIdx];
+					currentBoxel->setOutside();
+				}
+			}
+			roomnum++;
 		}
 	}
-
-	for (size_t i = 0; i < totalVoxels_; i++)
-	{
-
-	}
-
 
 	outputFieldToFile();
 

@@ -1,4 +1,4 @@
-#define IfcSchema Ifc4
+#define IfcSchema Ifc2x3
 
 #include "helper.h"
 
@@ -17,7 +17,8 @@
 class voxel {
 private:
 	bool isIntersecting_ = false;
-	std::vector<int> roomnums = { 0 };
+	bool isInside = true;
+	std::vector<int> roomnums;
 	BoostPoint3D center_;
 	double size_;
 
@@ -46,6 +47,14 @@ public:
 
 	// returns the products that intersect with the voxel
 	std::vector<IfcSchema::IfcProduct*> getProducts() { return intersectingProducts; }
+
+	void AddRoomNumber(int num) { roomnums.emplace_back(num); }
+
+	void setOutside() { isInside = false; }
+
+	std::vector<int> getRoomNumbers() { return roomnums; }
+
+	bool getIsInside() { return isInside; }
 
 	// add product to the voxel
 	void addProduct(IfcSchema::IfcProduct* product) { intersectingProducts.emplace_back(product); }
@@ -78,7 +87,7 @@ private:
 
 	// -1 is intersected 0 is not assigned 1..n is room assignement;
 	std::vector<int> Assignment;
-	std::map<int, voxel> VoxelLookup;
+	std::map<int, voxel*> VoxelLookup;
 
 	std::vector<int> getNeighbours(int voxelIndx);
 
