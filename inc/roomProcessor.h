@@ -1,4 +1,4 @@
-#define IfcSchema Ifc2x3
+#define IfcSchema Ifc4
 
 #include "helper.h"
 

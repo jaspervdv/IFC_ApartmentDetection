@@ -330,15 +330,6 @@ bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduc
 {
 	std::vector<gp_Pnt> productVert = getObjectPoints(product);
 
-	//std::cout << endl;
-
-	//for (size_t i = 0; i < productVert.size(); i++)
-	//{
-	//	printPoint(productVert[i]);
-	//}
-
-	//std::cout << endl;
-
 	if (!productVert.size() > 1) { return bg::model::box < BoostPoint3D >({ 0,0,0 }, { 0,0,0 }); }
 
 	// only outputs 2 corners of the three needed corners!
@@ -370,8 +361,8 @@ std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduc
 			std::vector<gp_Pnt> trianglePoints;
 			for (size_t k = 1; k <= 3; k++)
 			{
-				gp_Pnt p = mesh->Nodes().Value(theTriangle(k));
-				trianglePoints.emplace_back(p.Transformed(trsf));
+				gp_Pnt p = mesh->Nodes().Value(theTriangle(k)).Transformed(trsf);
+				trianglePoints.emplace_back(p);
 			}
 			triangleMeshList.emplace_back(trianglePoints);
 		}
@@ -388,10 +379,6 @@ void helper::addObjectToIndex(T object) {
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
 			continue;
 		}
-
-		//printPoint(box.min_corner());
-		//printPoint(box.max_corner());
-		//std::cout << std::endl;
 
 		index_.insert(std::make_pair(box, (int) index_.size()));
 		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(*it);
@@ -433,14 +420,16 @@ std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product
 		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
 
 		// move to OpenCASCADE
-		const TopoDS_Shape rShape = ob.at(0).Shape();
-		const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+		TopoDS_Shape rShape = ob.at(0).Shape();
+		gp_Trsf placement = ob.at(0).Placement().Trsf();
+		rShape.Move(trsf * placement); // location in global space
 
 		TopExp_Explorer expl;
-		for (expl.Init(aShape, TopAbs_VERTEX); expl.More(); expl.Next())
+		for (expl.Init(rShape, TopAbs_VERTEX); expl.More(); expl.Next())
 		{
 			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-			pointList.emplace_back(BRep_Tool::Pnt(vertex));
+			gp_Pnt p = BRep_Tool::Pnt(vertex);
+			pointList.emplace_back(p);
 		}
 	}
 
@@ -477,11 +466,12 @@ std::vector<TopoDS_Face> helper::getObjectFaces(const IfcSchema::IfcProduct* pro
 		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
 
 		// move to OpenCASCADE
-		const TopoDS_Shape rShape = ob.at(0).Shape();
-		const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+		TopoDS_Shape rShape = ob.at(0).Shape();
+		gp_Trsf placement = ob.at(0).Placement().Trsf();
+		rShape.Move(trsf * placement); // location in global space
 
 		TopExp_Explorer expl;
-		for (expl.Init(aShape, TopAbs_FACE); expl.More(); expl.Next())
+		for (expl.Init(rShape, TopAbs_FACE); expl.More(); expl.Next())
 		{
 			TopoDS_Face face = TopoDS::Face(expl.Current());
 			faceList.emplace_back(face);

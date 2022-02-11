@@ -97,7 +97,6 @@ void voxelfield::outputFieldToFile()
 			storageFile << pointList[k].X() << ", " << pointList[k].Y() << ", " << pointList[k].Z() << std::endl;
 		}
 
-
 		storageFile << it->second->getRoomNumbers()[0] << std::endl;
 
 		storageFile << "\n";
@@ -288,10 +287,6 @@ std::vector<gp_Pnt> voxel::getCornerPoints(double angle)
 
 	auto minPoint = Point3DBTO(boxelGeo.min_corner());
 	auto maxPoint = Point3DBTO(boxelGeo.max_corner());
-
-	// move to real world space
-	//auto minPoint = rotatePointWorld(Point3DBTO(boxelGeo.min_corner()), -angle);
-	//auto maxPoint = rotatePointWorld(Point3DBTO(boxelGeo.max_corner()), -angle);
 
 	// make a pointlist 0 - 3 lower ring, 4 - 7 upper ring
 	std::vector<gp_Pnt> pointList;

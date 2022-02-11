@@ -1,4 +1,4 @@
-#define IfcSchema Ifc2x3
+#define IfcSchema Ifc4
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
