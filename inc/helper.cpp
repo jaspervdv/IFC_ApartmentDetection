@@ -253,6 +253,8 @@ void helper::internalizeGeo()
 	gp_Pnt urrPoint = std::get<1>(base);
 	double smallestDistance = std::get<2>(base);
 
+
+
 	for (size_t i = 0; i < maxIt; i++)
 	{
 		std::tuple<gp_Pnt, gp_Pnt, double> left;
@@ -354,6 +356,11 @@ std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduc
 		auto mesh = BRep_Tool::Triangulation(faceList[i], loc);
 		const gp_Trsf& trsf = loc.Transformation();
 
+		if (mesh.IsNull()) //TODO warning
+		{
+			continue;
+		}
+
 		for (size_t j = 1; j <= mesh.get()->NbTriangles(); j++)
 		{
 			const Poly_Triangle& theTriangle = mesh->Triangles().Value(j);
@@ -366,7 +373,9 @@ std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduc
 			}
 			triangleMeshList.emplace_back(trianglePoints);
 		}
+
 	}
+
 	return triangleMeshList;
 }
 
@@ -375,6 +384,7 @@ void helper::addObjectToIndex(T object) {
 	// add doors to the rtree (for the appartment detection)
 	for (auto it = object->begin(); it != object->end(); ++it) {
 		bg::model::box <BoostPoint3D> box = makeObjectBox(*it);
+
 		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
 			continue;
@@ -431,7 +441,10 @@ std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product
 			gp_Pnt p = BRep_Tool::Pnt(vertex);
 			pointList.emplace_back(p);
 		}
+		break; //TODO fix
 	}
+
+
 
 	if (sortEdges) { return pointList; }
 
