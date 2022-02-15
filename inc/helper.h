@@ -1,4 +1,4 @@
-#define IfcSchema Ifc2x3
+#define IfcSchema Ifc4
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -181,6 +181,8 @@ public:
 	std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges = false);
 
 	std::vector<TopoDS_Face> getObjectFaces(const IfcSchema::IfcProduct* product);
+
+	TopoDS_Shape getObjectShape(const IfcSchema::IfcProduct* product);
 
 	void setIsConstruct(bool b) { isConstruct = b; }
 	

@@ -253,8 +253,6 @@ void helper::internalizeGeo()
 	gp_Pnt urrPoint = std::get<1>(base);
 	double smallestDistance = std::get<2>(base);
 
-
-
 	for (size_t i = 0; i < maxIt; i++)
 	{
 		std::tuple<gp_Pnt, gp_Pnt, double> left;
@@ -285,6 +283,10 @@ void helper::internalizeGeo()
 	lllPoint_ = lllPoint;
 	urrPoint_ = urrPoint;
 	originRot_ = rotation;
+
+	std::cout << rotation << std::endl;
+	printPoint(lllPoint);
+	printPoint(urrPoint_);
 
 	hasGeo = true;
 }
@@ -384,12 +386,10 @@ void helper::addObjectToIndex(T object) {
 	// add doors to the rtree (for the appartment detection)
 	for (auto it = object->begin(); it != object->end(); ++it) {
 		bg::model::box <BoostPoint3D> box = makeObjectBox(*it);
-
 		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
 			continue;
 		}
-
 		index_.insert(std::make_pair(box, (int) index_.size()));
 		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(*it);
 		auto lookup = std::make_tuple(*it, triangleMeshList);
@@ -419,32 +419,15 @@ std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product
 	gp_Trsf trsf;
 	kernel_->convert_placement(product->ObjectPlacement(), trsf);
 
-	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
-		const IfcSchema::IfcRepresentation* representation = *et;
+	TopoDS_Shape rShape = getObjectShape(product);
 
-		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
-
-		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-
-		// data is never deleted, can be used later as internalized data
-		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
-
-		// move to OpenCASCADE
-		TopoDS_Shape rShape = ob.at(0).Shape();
-		gp_Trsf placement = ob.at(0).Placement().Trsf();
-		rShape.Move(trsf * placement); // location in global space
-
-		TopExp_Explorer expl;
-		for (expl.Init(rShape, TopAbs_VERTEX); expl.More(); expl.Next())
-		{
-			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-			gp_Pnt p = BRep_Tool::Pnt(vertex);
-			pointList.emplace_back(p);
-		}
-		break; //TODO fix
+	TopExp_Explorer expl;
+	for (expl.Init(rShape, TopAbs_VERTEX); expl.More(); expl.Next())
+	{
+		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+		gp_Pnt p = BRep_Tool::Pnt(vertex);
+		pointList.emplace_back(p);
 	}
-
-
 
 	if (sortEdges) { return pointList; }
 
@@ -462,6 +445,22 @@ std::vector<TopoDS_Face> helper::getObjectFaces(const IfcSchema::IfcProduct* pro
 {
 	std::vector<TopoDS_Face> faceList;
 
+	if (!product->hasRepresentation()) { return {}; }
+
+	TopoDS_Shape rShape = getObjectShape(product);
+
+	TopExp_Explorer expl;
+	for (expl.Init(rShape, TopAbs_FACE); expl.More(); expl.Next())
+	{
+		TopoDS_Face face = TopoDS::Face(expl.Current());
+		faceList.emplace_back(face);
+	}
+
+	return faceList;
+}
+
+TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
+{
 	if (!product->hasRepresentation()) { return {}; }
 
 	auto representations = product->Representation()->Representations();
@@ -483,15 +482,8 @@ std::vector<TopoDS_Face> helper::getObjectFaces(const IfcSchema::IfcProduct* pro
 		gp_Trsf placement = ob.at(0).Placement().Trsf();
 		rShape.Move(trsf * placement); // location in global space
 
-		TopExp_Explorer expl;
-		for (expl.Init(rShape, TopAbs_FACE); expl.More(); expl.Next())
-		{
-			TopoDS_Face face = TopoDS::Face(expl.Current());
-			faceList.emplace_back(face);
-		}
+		return rShape;
 	}
-
-	return faceList;
 }
 
 void helper::wipeObject(helper* data, int id)

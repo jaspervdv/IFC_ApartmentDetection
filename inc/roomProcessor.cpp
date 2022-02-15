@@ -148,6 +148,8 @@ voxelfield::voxelfield(helperCluster* cluster)
 
 void voxelfield::makeRooms(helperCluster* cluster)
 {
+	// find intersections
+
 	int cSize = cluster->getSize();
 
 	std::vector<helper*> helperList;
@@ -172,7 +174,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		// find potential intersecting objects
 		for (int j = 0; j < cSize; j++)
 		{
+			qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
 			cluster->getHelper(j)->getIndexPointer()->query(bgi::intersects(boxelGeo), std::back_inserter(qResult));
+
 			if (qResult.size() == 0) { continue; }
 
 			for (size_t k = 0; k < qResult.size(); k++)
@@ -185,13 +189,18 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				if (boxel->checkIntersecting(lookup, pointList, cluster->getHelper(j)))
 				{
 					Assignment[i] = 1;
-					boxel->addProduct(product);
+					boxel->addProduct(std::make_tuple(j, product));
 				}
+
 			}
 		}
+
+
 		VoxelLookup.emplace(i, boxel);
 	}
 
+
+	// asign rooms
 	int roomnum = 0;
 	int c = 0;
 	for (int i = 0; i < totalVoxels_; i++)
@@ -257,6 +266,57 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			roomnum++;
 		}
 	}
+
+	// make openCascade objects of the intersecting voxels
+	for (size_t i = 0; i < VoxelLookup.size(); i++)
+	{
+		auto currentVoxel = VoxelLookup[i];
+
+		if (currentVoxel->getIsIntersecting()) { 
+			currentVoxel->makeOpenCascadeShape(planeRotation_); 
+
+			BOPAlgo_Splitter aSplitter;
+
+			TopTools_ListOfShape aLSObjects;
+			aLSObjects.Append(currentVoxel->getOpenCascadeShape());
+			TopTools_ListOfShape aLSTools;
+
+			auto voxelProducts = currentVoxel->getProducts();
+
+			for (size_t j = 0; j < voxelProducts.size(); j++)
+			{
+				int helperNum = std::get<0>(voxelProducts[j]);
+				IfcSchema::IfcProduct* product = std::get<1>(voxelProducts[j]);
+				aLSTools.Append(cluster->getHelper(helperNum)->getObjectShape(product));
+			}
+
+			aSplitter.SetArguments(aLSObjects);
+			aSplitter.SetTools(aLSTools);
+
+			aSplitter.SetRunParallel(Standard_True);
+			aSplitter.SetFuzzyValue(1.e-5);
+			aSplitter.SetNonDestructive(Standard_True);
+
+			aSplitter.Perform();
+
+			if (aSplitter.HasErrors()) { //check error status
+				std::cout << "error" << std::endl;;
+			}
+
+			const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
+
+			ofstream storageFile;
+			storageFile.open("D:/Documents/Uni/Thesis/sources/Models/exports/cascade.txt", std::ios_base::app);
+
+			
+			BRepTools::Write(aResult, storageFile);
+
+
+
+		}
+	}
+
+
 
 	outputFieldToFile();
 
@@ -366,7 +426,6 @@ double voxel::tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices) {
 
 bool voxel::checkIntersecting(LookupValue lookup, std::vector<gp_Pnt> voxelPoints, helper* h)
 {
-	std::vector<TopoDS_Face> voxelFaceList;
 	std::vector<std::vector<int>> vets = getVoxelEdges();
 
 	IfcSchema::IfcProduct* product = std::get<0>(lookup);
@@ -480,6 +539,34 @@ bool voxel::linearEqIntersection(std::vector<gp_Pnt> productPoints, std::vector<
 		}
 	}
 	return false;
+}
+
+bool voxel::makeOpenCascadeShape(double rotation)
+{
+	BRepBuilderAPI_Sewing sewer;
+
+	std::vector<std::vector<int>> intFaces = getVoxelFaces();
+	std::vector<gp_Pnt> pointList = getCornerPoints(rotation);
+
+	for (size_t j = 0; j < 6; j++)
+	{
+		gp_Pnt p0(pointList[intFaces[j][0]]);
+		gp_Pnt p1(pointList[intFaces[j][1]]);
+		gp_Pnt p2(pointList[intFaces[j][2]]);
+		gp_Pnt p3(pointList[intFaces[j][3]]);
+
+		TopoDS_Edge edge0 = BRepBuilderAPI_MakeEdge(p0, p1);
+		TopoDS_Edge edge1 = BRepBuilderAPI_MakeEdge(p1, p2);
+		TopoDS_Edge edge2 = BRepBuilderAPI_MakeEdge(p2, p3);
+		TopoDS_Edge edge3 = BRepBuilderAPI_MakeEdge(p3, p0);
+
+		TopoDS_Wire wire = BRepBuilderAPI_MakeWire(edge0, edge1, edge2, edge3);
+
+		sewer.Add(BRepBuilderAPI_MakeFace(wire));
+	}
+
+	sewer.Perform();
+	openCascadeShape_ = sewer.SewedShape();
 }
 
 bool voxel::checkIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle)

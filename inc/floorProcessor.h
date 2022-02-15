@@ -1,4 +1,3 @@
-#define IfcSchema Ifc2x3
 #include "helper.h"
 
 #include <memory>

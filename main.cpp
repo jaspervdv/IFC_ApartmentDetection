@@ -1,6 +1,3 @@
-// TODO: Multiple schemas
-#define IfcSchema Ifc4
-
 #include "inc/helper.h"
 #include "inc/floorProcessor.h"
 #include "inc/roomProcessor.h"
@@ -36,18 +33,17 @@
 #include <vld.h>
 #endif
 
-typedef IfcParse::IfcGlobalId guid;
-
 std::vector<std::string> GetSources() {
 
 	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
+	"D:/Documents/Uni/Thesis/sources/Models/simple_models/box_60.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
-	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
+	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
 	};
 
@@ -100,8 +96,6 @@ int main(int argc, char** argv) {
 	// outputs errors related to the selected objects
 	if (false) { Logger::SetOutput(&std::cout, &std::cout); }
 
-	std::cout << "[INFO] This build is made for " << IfcSchema::get_schema().name() << std::endl;
-
 	std::vector<std::string> sourcePathArray = GetSources();
 
 	// make export path
@@ -127,7 +121,7 @@ int main(int argc, char** argv) {
 	// get construction model num from user
 	if (sourcePathArray.size() == 1)
 	{
-		std::cout << "one file found, considered combination file" << std::endl;
+		std::cout << "[INFO] One file found, considered combination file" << std::endl;
 	}
 	else {
 		while (true)
@@ -229,6 +223,7 @@ int main(int argc, char** argv) {
 	}
 
 	voxelfield* field = new voxelfield(hCluster);
+
 	field->makeRooms(hCluster);
 
 

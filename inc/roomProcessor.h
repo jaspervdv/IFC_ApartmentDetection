@@ -1,5 +1,3 @@
-#define IfcSchema Ifc2x3
-
 #include "helper.h"
 
 #include <GProp_GProps.hxx>
@@ -7,6 +5,10 @@
 
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRep_Tool.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BOPAlgo_Splitter.hxx>
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -22,7 +24,9 @@ private:
 	BoostPoint3D center_;
 	double size_;
 
-	std::vector<IfcSchema::IfcProduct*> intersectingProducts;
+	TopoDS_Shape openCascadeShape_;
+
+	std::vector<std::tuple<int, IfcSchema::IfcProduct*>> intersectingProducts;
 
 	// compute the signed volume
 	double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices);
@@ -46,7 +50,7 @@ public:
 	std::vector<std::vector<int>> getVoxelEdges();
 
 	// returns the products that intersect with the voxel
-	std::vector<IfcSchema::IfcProduct*> getProducts() { return intersectingProducts; }
+	std::vector<std::tuple<int, IfcSchema::IfcProduct*>> getProducts() { return intersectingProducts; }
 
 	void AddRoomNumber(int num) { roomnums.emplace_back(num); }
 
@@ -57,7 +61,7 @@ public:
 	bool getIsInside() { return isInside; }
 
 	// add product to the voxel
-	void addProduct(IfcSchema::IfcProduct* product) { intersectingProducts.emplace_back(product); }
+	void addProduct(std::tuple<int, IfcSchema::IfcProduct*> product) { intersectingProducts.emplace_back(product); }
 
 	// check the intersection of a triangluted product and a voxel
 	bool checkIntersecting(LookupValue lookup, const std::vector<gp_Pnt> voxelPoints, helper* h);
@@ -65,6 +69,10 @@ public:
 	bool linearEqIntersection(std::vector<gp_Pnt> productPoints, std::vector<gp_Pnt> voxelPoints);
 
 	bool getIsIntersecting() { return isIntersecting_; }
+
+	TopoDS_Shape getOpenCascadeShape() { return openCascadeShape_; }
+
+	bool makeOpenCascadeShape(double rotation);
 };
 
 class voxelfield {
@@ -81,7 +89,7 @@ private:
 	int totalVoxels_;
 
 	// x y z size of the voxel
-	double voxelSize_ = 1;
+	double voxelSize_ = 2;
 
 	double planeRotation_ = 0;
 
