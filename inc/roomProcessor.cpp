@@ -270,51 +270,46 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			} 
 			else {
 
-				std::cout << totalRoom.size() << std::endl;
+				// fuse the voxels into one shape
+				BRepAlgoAPI_Fuse fuser;
+				TopTools_ListOfShape ob;
+				TopTools_ListOfShape tt;
 
-				for (size_t j= 0; j < totalRoom.size(); j++)
-				{
-					std::cout << totalRoom[j] << std::endl;
-				}
+				VoxelLookup[totalRoom[0]]->makeOpenCascadeShape(planeRotation_);
+				ob.Append(VoxelLookup[totalRoom[0]]->getOpenCascadeShape());
 
-				BOPAlgo_Builder aBuilder;
-
-				TopTools_ListOfShape aLSObjects;
-
-				for (size_t j = 0; j < totalRoom.size(); j++)
+				for (size_t j = 1; j < totalRoom.size(); j++)
 				{
 					voxel* currentBoxel = VoxelLookup[totalRoom[j]];
 					currentBoxel->makeOpenCascadeShape(planeRotation_);
-					aLSObjects.Append(currentBoxel->getOpenCascadeShape());
+					tt.Append(currentBoxel->getOpenCascadeShape());
 				}
 
-				aBuilder.SetArguments(aLSObjects);
-				aBuilder.SetRunParallel(Standard_True);
-				aBuilder.SetNonDestructive(Standard_True);
-				aBuilder.Perform();
-				const TopoDS_Shape& aResult = aBuilder.Shape();
+				fuser.SetArguments(ob);
+				fuser.SetTools(tt);
+				fuser.Build();
 
+				TopoDS_Shape fusedVoxel = fuser.Shape();
 
-
-
-
-				ShapeUpgrade_UnifySameDomain unif(aResult, Standard_True, Standard_True, Standard_True);
+				// simplefy the fused voxelshape
+				ShapeUpgrade_UnifySameDomain unif(fusedVoxel, Standard_True, Standard_True, Standard_True);
 				unif.SetSafeInputMode(Standard_False);
 				unif.AllowInternalEdges(Standard_False);
 				unif.Build();
-				auto shape = unif.Shape();
+				TopoDS_Shape shape = unif.Shape();
 
-				if (aBuilder.HasErrors())
+				TopExp_Explorer expl;
+				for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next())
 				{
-					std::cout << "error" << std::endl;
+					std::cout << "t" << std::endl;
 				}
 
 				printFaces(shape);
 
-
+		
 				ofstream storageFile;
 				storageFile.open("D:/Documents/Uni/Thesis/sources/Models/exports/cascade.txt", std::ios_base::app);
-				BRepTools::Write(shape, storageFile);
+				//BRepTools::Write(shape, storageFile);
 
 			}
 			roomnum++;
@@ -604,6 +599,13 @@ bool voxel::makeOpenCascadeShape(double rotation)
 	std::vector<std::vector<int>> intFaces = getVoxelFaces();
 	std::vector<gp_Pnt> pointList = getCornerPoints(rotation);
 
+	BRep_Builder brepBuilder;
+
+	TopoDS_Shell shell;
+	brepBuilder.MakeShell(shell);
+	TopoDS_Solid solid;
+	brepBuilder.MakeSolid(solid);
+
 	for (size_t j = 0; j < 6; j++)
 	{
 		gp_Pnt p0(pointList[intFaces[j][0]]);
@@ -617,12 +619,13 @@ bool voxel::makeOpenCascadeShape(double rotation)
 		TopoDS_Edge edge3 = BRepBuilderAPI_MakeEdge(p3, p0);
 
 		TopoDS_Wire wire = BRepBuilderAPI_MakeWire(edge0, edge1, edge2, edge3);
-
-		sewer.Add(BRepBuilderAPI_MakeFace(wire));
+		TopoDS_Face face = BRepBuilderAPI_MakeFace(wire);
+		brepBuilder.Add(shell, face);
 	}
 
-	sewer.Perform();
-	openCascadeShape_ = sewer.SewedShape();
+	brepBuilder.Add(solid, shell);
+
+	openCascadeShape_ = solid;
 }
 
 bool voxel::checkIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle)

@@ -7,7 +7,7 @@ void printPoint(gp_Pnt p) {
 void printFaces(TopoDS_Shape shape)
 {
 
-	std::cout << "Shape:" << std::endl;
+	//std::cout << "Shape:" << std::endl;
 	std::vector<TopoDS_Face> faceList;
 
 	TopExp_Explorer expl;
@@ -26,8 +26,7 @@ void printFaces(TopoDS_Shape shape)
 		}
 		std::cout << std::endl;
 	}
-	std::cout << std::endl;
-	std::cout << std::endl;
+	//std::cout << std::endl;
 }
 
 void printPoint(BoostPoint3D p) {

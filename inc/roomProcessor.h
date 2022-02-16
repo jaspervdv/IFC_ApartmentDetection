@@ -5,12 +5,16 @@
 
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRep_Tool.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BOPAlgo_Splitter.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <BRepBuilderAPI_MakeSolid.hxx>
+#include <BOPAlgo_MakerVolume.hxx>
+#include <BOPAlgo_CellsBuilder.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
