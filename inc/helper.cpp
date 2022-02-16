@@ -4,6 +4,32 @@ void printPoint(gp_Pnt p) {
 	std::cout << p.X() << ", " << p.Y() << ", " << p.Z() << ", " << std::endl;
 }
 
+void printFaces(TopoDS_Shape shape)
+{
+
+	std::cout << "Shape:" << std::endl;
+	std::vector<TopoDS_Face> faceList;
+
+	TopExp_Explorer expl;
+	for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next())
+	{
+		faceList.emplace_back(TopoDS::Face(expl.Current()));
+	}
+
+	for (size_t i = 0; i < faceList.size(); i++)
+	{
+		for (expl.Init(faceList[i], TopAbs_VERTEX); expl.More(); expl.Next())
+		{
+			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+			gp_Pnt p = BRep_Tool::Pnt(vertex);
+			printPoint(p);
+		}
+		std::cout << std::endl;
+	}
+	std::cout << std::endl;
+	std::cout << std::endl;
+}
+
 void printPoint(BoostPoint3D p) {
 	std::cout << bg::get<0>(p) << ", " << bg::get<1>(p) << ", " << bg::get<2>(p) << ", " << std::endl;
 }

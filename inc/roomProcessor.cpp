@@ -205,10 +205,15 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	int c = 0;
 	for (int i = 0; i < totalVoxels_; i++)
 	{
+		std::vector<voxel*> voxelRoom;
+		voxelRoom.clear();
+
 		if (Assignment[i] == 0) // Find unassigned voxel
 		{
 			std::vector<int> buffer = { i };
 			std::vector<int> totalRoom = { i };
+
+			Assignment[i] = 1;
 
 			bool isOutSide = false;
 
@@ -218,9 +223,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				for (size_t j = 0; j < buffer.size(); j++)
 				{
 					int currentIdx = buffer[j];
-
-					// assign and update voxel
-					Assignment[currentIdx] = 1;
 					voxel* currentBoxel = VoxelLookup[currentIdx];
 					currentBoxel->AddRoomNumber(roomnum);
 
@@ -248,27 +250,81 @@ void voxelfield::makeRooms(helperCluster* cluster)
 						{ 
 							tempBuffer.emplace_back(neighbourIndx[k]);
 							totalRoom.emplace_back(neighbourIndx[k]);
+
+							Assignment[neighbourIndx[k]] = 1;
 						}
 					}
 				}
+				buffer.clear();
 				buffer = tempBuffer;
 			}
 
 			if (isOutSide)
 			{
-				for (size_t i = 0; i < totalRoom.size(); i++)
+				for (size_t k = 0; k < totalRoom.size(); k++)
 				{
-					int currentIdx = totalRoom[i];
+					int currentIdx = totalRoom[k];
 					voxel* currentBoxel = VoxelLookup[currentIdx];
 					currentBoxel->setOutside();
 				}
+			} 
+			else {
+
+				std::cout << totalRoom.size() << std::endl;
+
+				for (size_t j= 0; j < totalRoom.size(); j++)
+				{
+					std::cout << totalRoom[j] << std::endl;
+				}
+
+				BOPAlgo_Builder aBuilder;
+
+				TopTools_ListOfShape aLSObjects;
+
+				for (size_t j = 0; j < totalRoom.size(); j++)
+				{
+					voxel* currentBoxel = VoxelLookup[totalRoom[j]];
+					currentBoxel->makeOpenCascadeShape(planeRotation_);
+					aLSObjects.Append(currentBoxel->getOpenCascadeShape());
+				}
+
+				aBuilder.SetArguments(aLSObjects);
+				aBuilder.SetRunParallel(Standard_True);
+				aBuilder.SetNonDestructive(Standard_True);
+				aBuilder.Perform();
+				const TopoDS_Shape& aResult = aBuilder.Shape();
+
+
+
+
+
+				ShapeUpgrade_UnifySameDomain unif(aResult, Standard_True, Standard_True, Standard_True);
+				unif.SetSafeInputMode(Standard_False);
+				unif.AllowInternalEdges(Standard_False);
+				unif.Build();
+				auto shape = unif.Shape();
+
+				if (aBuilder.HasErrors())
+				{
+					std::cout << "error" << std::endl;
+				}
+
+				printFaces(shape);
+
+
+				ofstream storageFile;
+				storageFile.open("D:/Documents/Uni/Thesis/sources/Models/exports/cascade.txt", std::ios_base::app);
+				BRepTools::Write(shape, storageFile);
+
 			}
 			roomnum++;
 		}
+
+
 	}
 
 	// make openCascade objects of the intersecting voxels
-	for (size_t i = 0; i < VoxelLookup.size(); i++)
+	/*for (size_t i = 0; i < VoxelLookup.size(); i++)
 	{
 		auto currentVoxel = VoxelLookup[i];
 
@@ -315,7 +371,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 		}
 	}
-
+	*/
 
 
 	outputFieldToFile();

@@ -9,6 +9,8 @@
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BOPAlgo_Splitter.hxx>
+#include <ShapeUpgrade_UnifySameDomain.hxx>
+#include <BRepBuilderAPI_MakeSolid.hxx>
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>

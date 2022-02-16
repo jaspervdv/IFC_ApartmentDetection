@@ -31,6 +31,8 @@ gp_Pnt rotatePointWorld(gp_Pnt p, double angle);
 
 void printPoint(gp_Pnt p);
 
+void printFaces(TopoDS_Shape shape);
+
 BoostPoint3D Point3DOTB(gp_Pnt oP);
 
 gp_Pnt Point3DBTO(BoostPoint3D oP);
