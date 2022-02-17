@@ -58,6 +58,18 @@ std::vector<int> voxelfield::getNeighbours(int voxelIndx)
 	if (xBig && ySmall) { neightbours.emplace_back(voxelIndx - xRelRange_ + 1); }
 	if (xSmall && yBig) { neightbours.emplace_back(voxelIndx + xRelRange_ - 1); }
 
+	if (xSmall && ySmall && zSmall) { neightbours.emplace_back(voxelIndx - (xRelRange_) * (yRelRange_) - xRelRange_ - 1 ); }
+	if (xBig && ySmall && zSmall) { neightbours.emplace_back(voxelIndx - (xRelRange_) * (yRelRange_)- xRelRange_ + 1); }
+
+	if (xSmall && yBig && zSmall) { neightbours.emplace_back(voxelIndx - (xRelRange_) * (yRelRange_) + xRelRange_ - 1); }
+	if (xBig && yBig && zSmall) { neightbours.emplace_back(voxelIndx - (xRelRange_) * (yRelRange_)+ xRelRange_ + 1); }
+
+	if (xSmall && yBig && zBig) { neightbours.emplace_back(voxelIndx + (xRelRange_) * (yRelRange_) + xRelRange_ - 1); }
+	if (xBig && yBig && zBig) { neightbours.emplace_back(voxelIndx + (xRelRange_) * (yRelRange_) + xRelRange_ + 1); }
+
+	if (xSmall && ySmall && zBig) { neightbours.emplace_back(voxelIndx + (xRelRange_) * (yRelRange_) - xRelRange_ - 1); }
+	if (xBig && ySmall && zBig) { neightbours.emplace_back(voxelIndx + (xRelRange_) * (yRelRange_) - xRelRange_ + 1); }
+
 	return neightbours;
 }
 BoostPoint3D voxelfield::relPointToWorld(BoostPoint3D p)
@@ -89,15 +101,24 @@ void voxelfield::outputFieldToFile()
 
 		auto products = it->second->getProducts();
 
-		if (it->second->getRoomNumbers().size() == 0) { continue; }
+		//if (it->second->getRoomNumbers().size() == 0) { continue; }
 		if (!it->second->getIsInside()) { continue; }
+		//if (!it->second->getIsIntersecting()) { continue; }
 
 		for (size_t k = 0; k < pointList.size(); k++)
 		{
 			storageFile << pointList[k].X() << ", " << pointList[k].Y() << ", " << pointList[k].Z() << std::endl;
 		}
 
-		storageFile << it->second->getRoomNumbers()[0] << std::endl;
+		if (it->second->getRoomNumbers().size() == 0) {
+			storageFile  << 3 << std::endl;
+			storageFile << "\n";
+			continue;
+
+		}
+
+		storageFile << it->second->getRoomNumbers().back() << std::endl;
+		//storageFile << "1" << std::endl;
 
 		storageFile << "\n";
 	}
@@ -188,7 +209,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 				if (boxel->checkIntersecting(lookup, pointList, cluster->getHelper(j)))
 				{
-					Assignment[i] = 1;
+					Assignment[i] = -1;
 					boxel->addProduct(std::make_tuple(j, product));
 				}
 
@@ -198,7 +219,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 		VoxelLookup.emplace(i, boxel);
 	}
-
 
 	// asign rooms
 	int roomnum = 0;
@@ -226,32 +246,52 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					voxel* currentBoxel = VoxelLookup[currentIdx];
 					currentBoxel->AddRoomNumber(roomnum);
 
+					if (Assignment[currentIdx] == -1)
+					{
+						continue;
+					}
+
 					// find neighbours
 					std::vector<int> neighbourIndx = getNeighbours(currentIdx);
 
-					if (neighbourIndx.size() < 16) { isOutSide = true; }
+					//if (neighbourIndx.size() < 16) { isOutSide = true; }
 
 					for (size_t k = 0; k < neighbourIndx.size(); k++)
 					{
 						// exlude if already assigned
-						if (Assignment[neighbourIndx[k]] != 0) { continue; }
-
-						bool dupli = false;
-						for (size_t l = 0; l < tempBuffer.size(); l++)
-						{
-							// exlude if already in buffer
-							if (neighbourIndx[k] == tempBuffer[l]) 
-							{ 
-								dupli = true;
-								break;
+						if (Assignment[neighbourIndx[k]] == 0) {
+							bool dupli = false;
+							for (size_t l = 0; l < tempBuffer.size(); l++)
+							{
+								// exlude if already in buffer
+								if (neighbourIndx[k] == tempBuffer[l])
+								{
+									dupli = true;
+									break;
+								}
 							}
-						}
-						if (!dupli) 
-						{ 
-							tempBuffer.emplace_back(neighbourIndx[k]);
-							totalRoom.emplace_back(neighbourIndx[k]);
+							if (!dupli)
+							{
+								tempBuffer.emplace_back(neighbourIndx[k]);
+								totalRoom.emplace_back(neighbourIndx[k]);
 
-							Assignment[neighbourIndx[k]] = 1;
+								Assignment[neighbourIndx[k]] = 1;
+							}
+						} 
+						else if (Assignment[neighbourIndx[k]] == -1) {
+							bool dupli = false;
+
+							for (size_t l = 0; l < totalRoom.size(); l++)
+							{
+								if (neighbourIndx[k] == totalRoom[l]) {
+									dupli = true;
+								}
+							}
+							if (!dupli)
+							{
+								totalRoom.emplace_back(neighbourIndx[k]);
+								tempBuffer.emplace_back(neighbourIndx[k]);
+							}
 						}
 					}
 				}
@@ -306,11 +346,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 				printFaces(shape);
 
-		
-				ofstream storageFile;
-				storageFile.open("D:/Documents/Uni/Thesis/sources/Models/exports/cascade.txt", std::ios_base::app);
-				//BRepTools::Write(shape, storageFile);
-
 			}
 			roomnum++;
 		}
@@ -318,6 +353,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 	}
 
+	outputFieldToFile();
 	// make openCascade objects of the intersecting voxels
 	/*for (size_t i = 0; i < VoxelLookup.size(); i++)
 	{
@@ -369,7 +405,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	*/
 
 
-	outputFieldToFile();
+
 
 }
 
