@@ -193,6 +193,7 @@ public:
 	void setName(std::string name) { fileName_ = name; }
 
 	//TODO implement
+	void whipeObject(IfcSchema::IfcProduct* product);
 	
 	// add bounding box items for the present objects in the data
 	void createBounds(helper* data);

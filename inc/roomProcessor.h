@@ -95,7 +95,7 @@ private:
 	int totalVoxels_;
 
 	// x y z size of the voxel
-	double voxelSize_ = 2;
+	double voxelSize_ = 1;
 
 	double planeRotation_ = 0;
 
@@ -112,6 +112,9 @@ private:
 	BoostPoint3D relPointToWorld(int px, int py, int pz);
 
 	BoostPoint3D WorldPointToRel(BoostPoint3D p);
+
+	// create a group of voxels representing a rough room
+	std::vector<int> growRoom(int startIndx, int roomnum);
 
 	void outputFieldToFile();
 

@@ -8,6 +8,7 @@
 #include <fstream>
 #include <string>
 #include <algorithm>
+#include <chrono>
 
 // boost includes
 #include <boost/log/core.hpp>
@@ -38,9 +39,9 @@ std::vector<std::string> GetSources() {
 	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/box_60.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/simple_models/simple_rooms.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/simple_rooms.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
@@ -93,6 +94,8 @@ bool yesNoQuestion() {
 
 
 int main(int argc, char** argv) {
+
+	auto startTime = std::chrono::high_resolution_clock::now();
 
 	// outputs errors related to the selected objects
 	if (false) { Logger::SetOutput(&std::cout, &std::cout); }
@@ -242,6 +245,10 @@ int main(int argc, char** argv) {
 	}
 
 	std::cout << "last line executed" << std::endl;
+
+	auto endTime = std::chrono::high_resolution_clock::now();
+
+	std::cout << "computing time = " << std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count() << std::endl;
 	
 	return 0;
 

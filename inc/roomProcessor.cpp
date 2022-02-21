@@ -101,20 +101,13 @@ void voxelfield::outputFieldToFile()
 
 		auto products = it->second->getProducts();
 
-		//if (it->second->getRoomNumbers().size() == 0) { continue; }
+		if (it->second->getRoomNumbers().size() == 0) { continue; }
 		if (!it->second->getIsInside()) { continue; }
 		//if (!it->second->getIsIntersecting()) { continue; }
 
 		for (size_t k = 0; k < pointList.size(); k++)
 		{
 			storageFile << pointList[k].X() << ", " << pointList[k].Y() << ", " << pointList[k].Z() << std::endl;
-		}
-
-		if (it->second->getRoomNumbers().size() == 0) {
-			storageFile  << 3 << std::endl;
-			storageFile << "\n";
-			continue;
-
 		}
 
 		storageFile << it->second->getRoomNumbers().back() << std::endl;
@@ -223,95 +216,15 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	int c = 0;
 	for (int i = 0; i < totalVoxels_; i++)
 	{
-		std::vector<voxel*> voxelRoom;
-		voxelRoom.clear();
-
 		if (Assignment[i] == 0) // Find unassigned voxel
 		{
-			std::vector<int> buffer = { i };
-			std::vector<int> totalRoom = { i };
+			std::vector<int> totalRoom = growRoom(i, roomnum);
 
-			Assignment[i] = 1;
+			if (totalRoom.size() == 0) { continue; }
 
-			bool isOutSide = false;
-
-			while (buffer.size() > 0)
-			{
-				std::vector<int> tempBuffer;
-				for (size_t j = 0; j < buffer.size(); j++)
-				{
-					int currentIdx = buffer[j];
-					voxel* currentBoxel = VoxelLookup[currentIdx];
-					currentBoxel->AddRoomNumber(roomnum);
-
-					if (Assignment[currentIdx] == -1)
-					{
-						continue;
-					}
-
-					// find neighbours
-					std::vector<int> neighbourIndx = getNeighbours(currentIdx);
-
-					if (neighbourIndx.size() < 26) { isOutSide = true; }
-
-					std::cout << neighbourIndx.size() << std::endl;
-
-					for (size_t k = 0; k < neighbourIndx.size(); k++)
-					{
-						// exlude if already assigned
-						if (Assignment[neighbourIndx[k]] == 0) {
-							bool dupli = false;
-							for (size_t l = 0; l < tempBuffer.size(); l++)
-							{
-								// exlude if already in buffer
-								if (neighbourIndx[k] == tempBuffer[l])
-								{
-									dupli = true;
-									break;
-								}
-							}
-							if (!dupli)
-							{
-								tempBuffer.emplace_back(neighbourIndx[k]);
-								totalRoom.emplace_back(neighbourIndx[k]);
-
-								Assignment[neighbourIndx[k]] = 1;
-							}
-						} 
-						else if (Assignment[neighbourIndx[k]] == -1) {
-							bool dupli = false;
-
-							for (size_t l = 0; l < totalRoom.size(); l++)
-							{
-								if (neighbourIndx[k] == totalRoom[l]) {
-									dupli = true;
-								}
-							}
-							if (!dupli)
-							{
-								totalRoom.emplace_back(neighbourIndx[k]);
-								tempBuffer.emplace_back(neighbourIndx[k]);
-							}
-						}
-					}
-				}
-				buffer.clear();
-				buffer = tempBuffer;
-			}
-
-			if (isOutSide)
-			{
-				for (size_t k = 0; k < totalRoom.size(); k++)
-				{
-					int currentIdx = totalRoom[k];
-					voxel* currentBoxel = VoxelLookup[currentIdx];
-					if (!currentBoxel->getIsIntersecting())
-					{
-						currentBoxel->setOutside();
-					}
-				}
-			} 
 			else {
+
+				std::cout << "join" << std::endl;
 
 				// fuse the voxels into one shape
 				std::vector<std::tuple<int, IfcSchema::IfcProduct*>> intersectionList;
@@ -356,9 +269,13 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 				fuser.SetArguments(ob);
 				fuser.SetTools(tt);
+				std::cout << "fuser" << std::endl;
+
 				fuser.Build();
 
 				TopoDS_Shape fusedVoxel = fuser.Shape();
+
+				std::cout << "simplefy" << std::endl;
 
 				// simplefy the fused voxelshape
 				ShapeUpgrade_UnifySameDomain unif(fusedVoxel, Standard_True, Standard_True, Standard_True);
@@ -366,6 +283,8 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				unif.AllowInternalEdges(Standard_False);
 				unif.Build();
 				TopoDS_Shape roomShape = unif.Shape();
+
+				std::cout << "end" << std::endl;
 
 				// intersect roomshape with walls 
 				BOPAlgo_Splitter aSplitter;
@@ -396,34 +315,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				TopExp_Explorer expl;
 				std::vector<TopoDS_Solid> solids;
 				for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) { solids.emplace_back(TopoDS::Solid(expl.Current())); }
-
-				// get shapes face counts
-				std::vector<int> SolidEdgeCount;
-				for (size_t j = 0; j < solids.size(); j++)
-				{
-					int count = 0;
-					for (expl.Init(aResult, TopAbs_EDGE); expl.More(); expl.Next()) {
-						count++;
-					}
-					SolidEdgeCount.emplace_back(count);
-				}
-
-				// get edge points of shapes
-				std::vector<std::vector<gp_Pnt>> solidPointList;
-				for (size_t j = 0; j < solids.size(); j++)
-				{
-					std::vector<gp_Pnt> pointList;
-					pointList.clear();
-					for (expl.Init(solids[j], TopAbs_VERTEX); expl.More(); expl.Next())
-					{
-						TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-						gp_Pnt p = BRep_Tool::Pnt(vertex);
-						pointList.emplace_back(p);
-					}
-					solidPointList.emplace_back(pointList);
-				}
-
-				std::vector<int> connectededges(solids.size(), 0);
 
 
 				// get roomshape
@@ -471,6 +362,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					// TODO exit
 				}
 
+				std::vector<gp_Pnt> roomShapePoints;
+				roomShapePoints.clear();
+
 				// TODO search for encapsulation
 
 				// filter for volume 
@@ -513,6 +407,91 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	}
 
 	outputFieldToFile();
+}
+
+std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)
+{
+	std::vector<int> buffer = { startIndx };
+	std::vector<int> totalRoom = { startIndx };
+
+	Assignment[startIndx] = 1;
+
+	bool isOutSide = false;
+
+	while (buffer.size() > 0)
+	{
+		std::vector<int> tempBuffer;
+		for (size_t j = 0; j < buffer.size(); j++)
+		{
+			int currentIdx = buffer[j];
+			voxel* currentBoxel = VoxelLookup[currentIdx];
+			currentBoxel->AddRoomNumber(roomnum);
+
+			if (Assignment[currentIdx] == -1)
+			{
+				continue;
+			}
+
+			// find neighbours
+			std::vector<int> neighbourIndx = getNeighbours(currentIdx);
+
+			if (neighbourIndx.size() < 26) { isOutSide = true; }
+
+			for (size_t k = 0; k < neighbourIndx.size(); k++)
+			{
+				// exlude if already assigned
+				if (Assignment[neighbourIndx[k]] == 0) {
+					bool dupli = false;
+					for (size_t l = 0; l < tempBuffer.size(); l++)
+					{
+						// exlude if already in buffer
+						if (neighbourIndx[k] == tempBuffer[l])
+						{
+							dupli = true;
+							break;
+						}
+					}
+					if (!dupli)
+					{
+						tempBuffer.emplace_back(neighbourIndx[k]);
+						totalRoom.emplace_back(neighbourIndx[k]);
+						Assignment[neighbourIndx[k]] = 1;
+					}
+				}
+				else if (Assignment[neighbourIndx[k]] == -1) {
+					bool dupli = false;
+
+					for (size_t l = 0; l < totalRoom.size(); l++)
+					{
+						if (neighbourIndx[k] == totalRoom[l]) {
+							dupli = true;
+						}
+					}
+					if (!dupli)
+					{
+						totalRoom.emplace_back(neighbourIndx[k]);
+						tempBuffer.emplace_back(neighbourIndx[k]);
+					}
+				}
+			}
+		}
+		buffer.clear();
+		buffer = tempBuffer;
+	}
+	if (isOutSide)
+	{
+		for (size_t k = 0; k < totalRoom.size(); k++)
+		{
+			int currentIdx = totalRoom[k];
+			voxel* currentBoxel = VoxelLookup[currentIdx];
+			if (!currentBoxel->getIsIntersecting())
+			{
+				currentBoxel->setOutside();
+			}
+		}
+		return{};
+	}
+	return totalRoom;
 }
 
 voxel::voxel(BoostPoint3D center, double size)

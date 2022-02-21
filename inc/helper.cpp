@@ -511,6 +511,13 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 	}
 }
 
+void helper::whipeObject(IfcSchema::IfcProduct* product)
+{
+	file_->removeEntity(product);
+
+	// TODO check dependencies!
+}
+
 void helper::wipeObject(helper* data, int id)
 {
 	//TODO find the nested indx located in the file
