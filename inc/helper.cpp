@@ -6,7 +6,6 @@ void printPoint(gp_Pnt p) {
 
 void printFaces(TopoDS_Shape shape)
 {
-
 	//std::cout << "Shape:" << std::endl;
 	std::vector<TopoDS_Face> faceList;
 
@@ -15,6 +14,8 @@ void printFaces(TopoDS_Shape shape)
 	{
 		faceList.emplace_back(TopoDS::Face(expl.Current()));
 	}
+
+
 
 	for (size_t i = 0; i < faceList.size(); i++)
 	{

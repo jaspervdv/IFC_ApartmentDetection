@@ -1,5 +1,20 @@
 #include "roomProcessor.h"
 
+TopoDS_Face makeFace(std::vector<gp_Pnt> voxelPointList, std::vector<int> pointFaceIndx) {
+	gp_Pnt p0(voxelPointList[pointFaceIndx[0]]);
+	gp_Pnt p1(voxelPointList[pointFaceIndx[1]]);
+	gp_Pnt p2(voxelPointList[pointFaceIndx[2]]);
+	gp_Pnt p3(voxelPointList[pointFaceIndx[3]]);
+
+	TopoDS_Edge edge0 = BRepBuilderAPI_MakeEdge(p0, p1);
+	TopoDS_Edge edge1 = BRepBuilderAPI_MakeEdge(p1, p2);
+	TopoDS_Edge edge2 = BRepBuilderAPI_MakeEdge(p2, p3);
+	TopoDS_Edge edge3 = BRepBuilderAPI_MakeEdge(p3, p0);
+
+	TopoDS_Wire wire = BRepBuilderAPI_MakeWire(edge0, edge1, edge2, edge3);
+	return BRepBuilderAPI_MakeFace(wire);
+}
+
 template<typename T>
 T voxelfield::linearToRelative(int i) {
 	double x = i % xRelRange_;
@@ -91,6 +106,45 @@ BoostPoint3D voxelfield::relPointToWorld(int px, int py, int pz)
 	return BoostPoint3D(xCoord, yCoord, zCoord);
 }
 
+std::vector<TopoDS_Face> voxelfield::getPartialFaces(std::vector<int> roomIndx, int voxelIndx)
+{
+	gp_Pnt loc3D = linearToRelative<gp_Pnt>(voxelIndx);
+
+	bool faceLeft = true;
+	bool faceRight = true;
+	bool faceFront = true;
+	bool faceBack = true;
+	bool faceUp = true;
+	bool faceDown = true;
+
+	// leftFace
+	for (size_t i = 0; i < roomIndx.size(); i++)
+	{
+		if (roomIndx[i] == voxelIndx - 1) { faceLeft = false; }
+		if (roomIndx[i] == voxelIndx + 1) { faceRight = false; }
+		if (roomIndx[i] == voxelIndx - xRelRange_) { faceFront = false; }
+		if (roomIndx[i] == voxelIndx + xRelRange_) { faceBack = false; }
+		if (roomIndx[i] == voxelIndx - (xRelRange_) * (yRelRange_)) { faceDown = false; }
+		if (roomIndx[i] == voxelIndx + (xRelRange_) * (yRelRange_)) { faceUp = false; }
+	}
+
+	if (!faceLeft && !faceRight && !faceFront && !faceBack && !faceUp && !faceDown){ return {};}
+	voxel* currentBoxel = VoxelLookup[voxelIndx];
+
+	std::vector<TopoDS_Face> faceList;
+	std::vector<gp_Pnt> voxelPointList = currentBoxel->getCornerPoints(planeRotation_);
+	std::vector<std::vector<int>> voxelFaceList = currentBoxel->getVoxelFaces();
+
+	if (faceLeft) { faceList.emplace_back(makeFace(voxelPointList, voxelFaceList[3])); }
+	if (faceRight) { faceList.emplace_back(makeFace(voxelPointList, voxelFaceList[1])); }
+	if (faceFront) { faceList.emplace_back(makeFace(voxelPointList, voxelFaceList[0])); }
+	if (faceBack) { faceList.emplace_back(makeFace(voxelPointList, voxelFaceList[2])); }
+	if (faceUp) { faceList.emplace_back(makeFace(voxelPointList, voxelFaceList[4])); }
+	if (faceDown) { faceList.emplace_back(makeFace(voxelPointList, voxelFaceList[5])); }
+
+	return faceList;
+}
+
 void voxelfield::outputFieldToFile()
 {
 	std::ofstream storageFile;
@@ -162,8 +216,6 @@ voxelfield::voxelfield(helperCluster* cluster)
 
 void voxelfield::makeRooms(helperCluster* cluster)
 {
-	// find intersections
-
 	int cSize = cluster->getSize();
 
 	std::vector<helper*> helperList;
@@ -222,185 +274,171 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			if (totalRoom.size() == 0) { continue; }
 
-			else {
+			// fuse the voxels into one shape
+			std::vector<std::tuple<int, IfcSchema::IfcProduct*>> intersectionList;
+			intersectionList.clear();
 
-				std::cout << "join" << std::endl;
+			BRep_Builder brepBuilder;
 
-				// fuse the voxels into one shape
-				std::vector<std::tuple<int, IfcSchema::IfcProduct*>> intersectionList;
-				intersectionList.clear();
+			TopoDS_Shell shell;
+			brepBuilder.MakeShell(shell);
+			TopoDS_Solid roughRoomShape;
+			brepBuilder.MakeSolid(roughRoomShape);
 
-				BRepAlgoAPI_Fuse fuser;
-				TopTools_ListOfShape ob;
-				TopTools_ListOfShape tt;
+			for (size_t j = 1; j < totalRoom.size(); j++)
+			{
+				std::vector<TopoDS_Face> borderFaces = getPartialFaces(totalRoom, totalRoom[j]);
+				if (borderFaces.size() == 0) { continue; }
+				for (size_t k = 0; k < borderFaces.size(); k++) { brepBuilder.Add(shell, borderFaces[k]); };
+				voxel* currentBoxel = VoxelLookup[totalRoom[j]];
 
-				VoxelLookup[totalRoom[0]]->makeOpenCascadeShape(planeRotation_);
-				ob.Append(VoxelLookup[totalRoom[0]]->getOpenCascadeShape());
-
-				for (size_t j = 1; j < totalRoom.size(); j++)
+				auto productList = currentBoxel->getProducts();
+				for (size_t l = 0; l < productList.size(); l++)
 				{
-					voxel* currentBoxel = VoxelLookup[totalRoom[j]];
-					currentBoxel->makeOpenCascadeShape(planeRotation_);
-					tt.Append(currentBoxel->getOpenCascadeShape());
-
-					if (!currentBoxel->getIsIntersecting()) { continue; }
-
-					auto productList = currentBoxel->getProducts();
-
-					for (size_t l = 0; l < productList.size(); l++)
+					bool dup = false;
+					for (size_t k = 0; k < intersectionList.size(); k++)
 					{
-						bool dup = false;
-
-						for (size_t k = 0; k < intersectionList.size(); k++)
+						if (productList[l] == intersectionList[k])
 						{
-							if (productList[l] == intersectionList[k])
-							{
-								dup = true;
-								break;
-							}
-						}
-
-						if (!dup)
-						{
-							intersectionList.emplace_back(productList[l]);
-						}
-					}
-				}
-
-				fuser.SetArguments(ob);
-				fuser.SetTools(tt);
-				std::cout << "fuser" << std::endl;
-
-				fuser.Build();
-
-				TopoDS_Shape fusedVoxel = fuser.Shape();
-
-				std::cout << "simplefy" << std::endl;
-
-				// simplefy the fused voxelshape
-				ShapeUpgrade_UnifySameDomain unif(fusedVoxel, Standard_True, Standard_True, Standard_True);
-				unif.SetSafeInputMode(Standard_False);
-				unif.AllowInternalEdges(Standard_False);
-				unif.Build();
-				TopoDS_Shape roomShape = unif.Shape();
-
-				std::cout << "end" << std::endl;
-
-				// intersect roomshape with walls 
-				BOPAlgo_Splitter aSplitter;
-
-				TopTools_ListOfShape aLSObjects;
-				aLSObjects.Append(roomShape);
-				TopTools_ListOfShape aLSTools;
-
-				for (size_t j = 0; j < intersectionList.size(); j++)
-				{
-					int helperNum = std::get<0>(intersectionList[j]);
-					IfcSchema::IfcProduct* product = std::get<1>(intersectionList[j]);
-					aLSTools.Append(cluster->getHelper(helperNum)->getObjectShape(product));
-				}
-
-				aSplitter.SetArguments(aLSObjects);
-				aSplitter.SetTools(aLSTools);
-
-				aSplitter.SetRunParallel(Standard_True);
-				aSplitter.SetFuzzyValue(1.e-5);
-				aSplitter.SetNonDestructive(Standard_True);
-
-				aSplitter.Perform();
-
-				const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
-
-				// get roomshape
-				TopExp_Explorer expl;
-				std::vector<TopoDS_Solid> solids;
-				for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) { solids.emplace_back(TopoDS::Solid(expl.Current())); }
-
-
-				// get roomshape
-				// eliminate outside shape by Z values
-				double maxZ = -9999;
-				double minZ = 9999;
-
-				for (size_t j = 0; j < solids.size(); j++)
-				{
-					for (expl.Init(solids[j], TopAbs_VERTEX); expl.More(); expl.Next()) {
-						gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
-
-
-						if (maxZ == -9999) { maxZ = p.Z(); }
-						else if (maxZ < p.Z()) { maxZ = p.Z(); }
-
-						if (minZ == 9999) { minZ = p.Z(); }
-						else if (minZ > p.Z()) { minZ = p.Z(); }
-
-					}
-				}
-
-				std::vector<int> outSideIndx;
-				outSideIndx.clear();
-
-				for (size_t j = 0; j < solids.size(); j++)
-				{
-					for (expl.Init(solids[j], TopAbs_VERTEX); expl.More(); expl.Next()) {
-						gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
-
-						if (p.Z() == maxZ || p.Z() == minZ) 
-						{ 
-							outSideIndx.emplace_back(j); 
+							dup = true;
 							break;
 						}
 					}
+					if (!dup) { intersectionList.emplace_back(productList[l]); }
 				}
+			}
 
-				std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
-				for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
+			brepBuilder.Add(roughRoomShape, shell);
 
-				if (solids.size() == 1)
-				{
-					// room found
-					// TODO exit
+			std::cout << "simplefy" << std::endl;
+
+			// simplefy the fused voxelshape
+			ShapeUpgrade_UnifySameDomain unif(roughRoomShape, Standard_True, Standard_True, Standard_True);
+			unif.SetSafeInputMode(Standard_False);
+			unif.AllowInternalEdges(Standard_False);
+			unif.Build();
+			TopoDS_Shape roomShape = unif.Shape();
+
+			std::cout << "end" << std::endl;
+
+			// intersect roomshape with walls 
+			BOPAlgo_Splitter aSplitter;
+
+			TopTools_ListOfShape aLSObjects;
+			aLSObjects.Append(roomShape);
+			TopTools_ListOfShape aLSTools;
+
+			for (size_t j = 0; j < intersectionList.size(); j++)
+			{
+				int helperNum = std::get<0>(intersectionList[j]);
+				IfcSchema::IfcProduct* product = std::get<1>(intersectionList[j]);
+				aLSTools.Append(cluster->getHelper(helperNum)->getObjectShape(product));
+			}
+
+			aSplitter.SetArguments(aLSObjects);
+			aSplitter.SetTools(aLSTools);
+
+			aSplitter.SetRunParallel(Standard_True);
+			aSplitter.SetFuzzyValue(1.e-5);
+			aSplitter.SetNonDestructive(Standard_True);
+
+			aSplitter.Perform();
+
+			const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
+
+			// get roomshape
+			TopExp_Explorer expl;
+			std::vector<TopoDS_Solid> solids;
+			for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) { solids.emplace_back(TopoDS::Solid(expl.Current())); }
+
+			if (solids.size() == 1)
+			{
+				std::cout << "endsolid" << std::endl;
+				//printFaces(solids[0]);
+				//return;
+			}
+
+
+
+			// get roomshape
+			// eliminate outside shape by Z values
+			double maxZ = -9999;
+			double minZ = 9999;
+
+			for (size_t j = 0; j < solids.size(); j++)
+			{
+				for (expl.Init(solids[j], TopAbs_VERTEX); expl.More(); expl.Next()) {
+					gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
+
+
+					if (maxZ == -9999) { maxZ = p.Z(); }
+					else if (maxZ < p.Z()) { maxZ = p.Z(); }
+
+					if (minZ == 9999) { minZ = p.Z(); }
+					else if (minZ > p.Z()) { minZ = p.Z(); }
+
 				}
+			}
 
-				std::vector<gp_Pnt> roomShapePoints;
-				roomShapePoints.clear();
+			std::vector<int> outSideIndx;
+			outSideIndx.clear();
 
-				// TODO search for encapsulation
+			for (size_t j = 0; j < solids.size(); j++)
+			{
+				for (expl.Init(solids[j], TopAbs_VERTEX); expl.More(); expl.Next()) {
+					gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
 
-				// filter for volume 
-				double maxVolume = 0;
-				int BiggestRoom;
-
-				GProp_GProps gprop;
-
-				for (size_t j = 0; j < solids.size(); j++)
-				{
-					BRepGProp::VolumeProperties(solids[j], gprop);
-					double volume = gprop.Mass();
-
-					if (maxVolume < volume)
+					if (p.Z() == maxZ || p.Z() == minZ)
 					{
-						maxVolume = volume;
-						BiggestRoom = j;
+						outSideIndx.emplace_back(j);
+						break;
 					}
 				}
-
-				std::cout << "new" << std::endl;
-				printFaces(solids[BiggestRoom]);
-
-
-
-				// temp output
-
-				//ofstream storageFile;
-				//storageFile.open("D:/Documents/Uni/Thesis/sources/Models/exports/cascade.txt", std::ios_base::app);
-
-				//BRepTools::Write(aResult, storageFile);
-
-
-
 			}
+
+			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
+			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
+
+			if (solids.size() == 1)
+			{
+				// room found
+				// TODO exit
+			}
+
+			std::vector<gp_Pnt> roomShapePoints;
+			roomShapePoints.clear();
+
+			// TODO search for encapsulation
+
+			// filter for volume 
+			double maxVolume = 0;
+			int BiggestRoom;
+
+			GProp_GProps gprop;
+
+			std::cout << solids.size() << std::endl;
+
+			for (size_t j = 0; j < solids.size(); j++)
+			{
+				BRepGProp::VolumeProperties(solids[j], gprop);
+				double volume = gprop.Mass();
+
+				if (maxVolume < volume)
+				{
+					maxVolume = volume;
+					BiggestRoom = j;
+				}
+			}
+
+			std::cout << "new" << std::endl;
+			printFaces(solids[BiggestRoom]);
+			std::cout << "new" << std::endl;
+
 			roomnum++;
+
+			// Make a room
+
+
 		}
 
 

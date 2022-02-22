@@ -3,17 +3,11 @@
 #include <GProp_GProps.hxx>
 #include <BRepGProp.hxx>
 
-#include <BRepMesh_IncrementalMesh.hxx>
-#include <BRep_Tool.hxx>
-#include <BRep_Builder.hxx>
-#include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
 #include <BOPAlgo_Splitter.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
-#include <BRepBuilderAPI_MakeSolid.hxx>
-#include <BOPAlgo_MakerVolume.hxx>
-#include <BOPAlgo_CellsBuilder.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 
 #include <boost/log/core.hpp>
@@ -102,7 +96,7 @@ private:
 	// -1 is intersected 0 is not assigned 1..n is room assignement;
 	std::vector<int> Assignment;
 	std::map<int, voxel*> VoxelLookup;
-
+	
 	std::vector<int> getNeighbours(int voxelIndx);
 
 	template<typename T>
@@ -115,6 +109,10 @@ private:
 
 	// create a group of voxels representing a rough room
 	std::vector<int> growRoom(int startIndx, int roomnum);
+
+	std::vector<TopoDS_Face> getPartialFaces(std::vector<int> roomIndx, int voxelIndx);
+
+	const TopoDS_Shape& SmoothSplitSolid(TopoDS_Solid roughRoomShape, std::vector<std::tuple<int, IfcSchema::IfcProduct*>> intersectionList);
 
 	void outputFieldToFile();
 
