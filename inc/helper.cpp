@@ -156,10 +156,11 @@ std::vector<gp_Pnt> helper::getAllPoints(IfcSchema::IfcProduct::list::ptr produc
 		IfcSchema::IfcProduct* product = *it;
 
 		if (!product->hasRepresentation()) { continue; }
+		if (product->data().type()->name() == "IfcAnnotation") { continue; } // find points another way
+
 		if (product->data().type()->name() == "IfcSite") { continue; }
 
 		std::vector<gp_Pnt> temp = getObjectPoints(product);
-		
 		if (temp.size() > 1);
 		{
 			for (size_t i = 0; i < temp.size(); i++) { pointList.emplace_back(temp[i]); }
@@ -267,7 +268,7 @@ void helper::internalizeGeo()
 	// get products
 	IfcSchema::IfcProduct::list::ptr products = file_->instances_by_type<IfcSchema::IfcProduct>();
 	std::vector<gp_Pnt> pointList = getAllPoints(products);
-	
+
 	// approximate smalles bbox
 	double angle = 22.5 * (M_PI / 180);
 	double rotation = 0;

@@ -129,7 +129,7 @@ std::vector<TopoDS_Face> voxelfield::getPartialFaces(std::vector<int> roomIndx, 
 	}
 
 	if (!faceLeft && !faceRight && !faceFront && !faceBack && !faceUp && !faceDown){ return {};}
-	voxel* currentBoxel = VoxelLookup[voxelIndx];
+	voxel* currentBoxel = VoxelLookup_[voxelIndx];
 
 	std::vector<TopoDS_Face> faceList;
 	std::vector<gp_Pnt> voxelPointList = currentBoxel->getCornerPoints(planeRotation_);
@@ -145,11 +145,48 @@ std::vector<TopoDS_Face> voxelfield::getPartialFaces(std::vector<int> roomIndx, 
 	return faceList;
 }
 
+void voxelfield::addVoxel(int indx, helperCluster* cluster)
+{
+	int cSize = cluster->getSize();
+	auto midPoint = relPointToWorld(linearToRelative<BoostPoint3D>(indx));
+	voxel* boxel = new voxel(midPoint, voxelSize_);
+
+	// make a pointlist 0 - 3 lower ring, 4 - 7 upper ring
+	auto boxelGeo = boxel->getVoxelGeo();
+	std::vector<gp_Pnt> pointList = boxel->getCornerPoints(planeRotation_);
+
+	// find potential intersecting objects
+	std::vector<Value> qResult;
+	for (int j = 0; j < cSize; j++)
+	{
+		qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
+		cluster->getHelper(j)->getIndexPointer()->query(bgi::intersects(boxelGeo), std::back_inserter(qResult));
+
+		if (qResult.size() == 0) { continue; }
+
+		for (size_t k = 0; k < qResult.size(); k++)
+		{
+			LookupValue lookup = cluster->getHelper(j)->getLookup(qResult[k].second);
+			IfcSchema::IfcProduct* product = std::get<0>(lookup);
+
+			if (!product->hasRepresentation()) { continue; }
+
+			if (boxel->checkIntersecting(lookup, pointList, cluster->getHelper(j)))
+			{
+				Assignment_[indx] = -1;
+				boxel->addProduct(std::make_tuple(j, product));
+			}
+
+		}
+	}
+	VoxelLookup_.emplace(indx, boxel);
+}
+
 void voxelfield::outputFieldToFile()
 {
 	std::ofstream storageFile;
 	storageFile.open("D:/Documents/Uni/Thesis/sources/Models/exports/voxels.txt", std::ios_base::app);
-	for (auto it = VoxelLookup.begin(); it != VoxelLookup.end(); ++ it )
+	for (auto it = VoxelLookup_.begin(); it != VoxelLookup_.end(); ++ it )
 	{
 		std::vector<gp_Pnt> pointList = it->second->getCornerPoints(planeRotation_);
 
@@ -189,7 +226,7 @@ voxelfield::voxelfield(helperCluster* cluster)
 	zRelRange_ = (int) ceil(zRange / voxelSize_) + 1;
 
 	totalVoxels_ = xRelRange_ * yRelRange_ * zRelRange_;
-	Assignment = std::vector<int>(totalVoxels_, 0);
+	Assignment_ = std::vector<int>(totalVoxels_, 0);
 
 	planeRotation_ = cluster->getDirection();
 
@@ -216,62 +253,30 @@ voxelfield::voxelfield(helperCluster* cluster)
 
 void voxelfield::makeRooms(helperCluster* cluster)
 {
-	int cSize = cluster->getSize();
-
-	std::vector<helper*> helperList;
+	// TODO get Room locations in memory
+	IfcSchema::IfcSpace::list::ptr rooms;
 
 	for (size_t i = 0; i < cluster->getSize(); i++)
 	{
-		helperList.emplace_back(cluster->getHelper(i));
+		//rooms.get()->push(cluster->getHelper(i)->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>());
 	}
 
-	for (int i = 0; i < totalVoxels_; i++)
-	{
-		auto midPoint = relPointToWorld(linearToRelative<BoostPoint3D>(i));
-		voxel* boxel = new voxel(midPoint, voxelSize_);
+	// pre make hierachy helper
+	IfcHierarchyHelper<IfcSchema> hierarchyHelper;
 
-		auto boxelGeo = boxel->getVoxelGeo();
-
-		std::vector<Value> qResult;
-
-		// make a pointlist 0 - 3 lower ring, 4 - 7 upper ring
-		std::vector<gp_Pnt> pointList = boxel->getCornerPoints(planeRotation_);
-
-		// find potential intersecting objects
-		for (int j = 0; j < cSize; j++)
-		{
-			qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
-			cluster->getHelper(j)->getIndexPointer()->query(bgi::intersects(boxelGeo), std::back_inserter(qResult));
-
-			if (qResult.size() == 0) { continue; }
-
-			for (size_t k = 0; k < qResult.size(); k++)
-			{
-				LookupValue lookup = cluster->getHelper(j)->getLookup(qResult[k].second);
-				IfcSchema::IfcProduct* product = std::get<0>(lookup);
-
-				if (!product->hasRepresentation()) { continue; }
-
-				if (boxel->checkIntersecting(lookup, pointList, cluster->getHelper(j)))
-				{
-					Assignment[i] = -1;
-					boxel->addProduct(std::make_tuple(j, product));
-				}
-
-			}
-		}
-		VoxelLookup.emplace(i, boxel);
-	}
+	// test voxel for intersection and add voxel objects to the voxelfield
+	for (int i = 0; i < totalVoxels_; i++) { addVoxel(i, cluster); }
 
 	// asign rooms
 	int roomnum = 0;
-	int c = 0;
 	for (int i = 0; i < totalVoxels_; i++)
 	{
-		if (Assignment[i] == 0) // Find unassigned voxel
+		if (Assignment_[i] == 0) // Find unassigned voxel
 		{
+			std::cout << "new" << std::endl;
 			std::vector<int> totalRoom = growRoom(i, roomnum);
 
+			std::cout << "build shape" << std::endl;
 			if (totalRoom.size() == 0) { continue; }
 
 			// fuse the voxels into one shape
@@ -290,7 +295,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				std::vector<TopoDS_Face> borderFaces = getPartialFaces(totalRoom, totalRoom[j]);
 				if (borderFaces.size() == 0) { continue; }
 				for (size_t k = 0; k < borderFaces.size(); k++) { brepBuilder.Add(shell, borderFaces[k]); };
-				voxel* currentBoxel = VoxelLookup[totalRoom[j]];
+				voxel* currentBoxel = VoxelLookup_[totalRoom[j]];
 
 				auto productList = currentBoxel->getProducts();
 				for (size_t l = 0; l < productList.size(); l++)
@@ -319,7 +324,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			unif.Build();
 			TopoDS_Shape roomShape = unif.Shape();
 
-			std::cout << "end" << std::endl;
+			std::cout << "split" << std::endl;
 
 			// intersect roomshape with walls 
 			BOPAlgo_Splitter aSplitter;
@@ -429,20 +434,51 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					BiggestRoom = j;
 				}
 			}
-
-			std::cout << "new" << std::endl;
 			printFaces(solids[BiggestRoom]);
-			std::cout << "new" << std::endl;
+
+			
+			IfcSchema::IfcProductRepresentation* roomRepresentation = IfcGeom::serialise(STRINGIFY(IfcSchema), solids[BiggestRoom], false)->as<IfcSchema::IfcProductRepresentation>();;
+			
+			if (roomRepresentation == 0) { continue; }
+
+			// Make a space object
+			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
+				IfcParse::IfcGlobalId(),		// GlobalId
+				0,								// OwnerHistory
+				std::string("Space"),			// Name
+				boost::none,					// Description
+				boost::none,					// Object type
+				0,								// Object Placement
+				roomRepresentation,				// Representation
+				std::string("Spaaaace"),		// Long name
+				boost::none,					// Composition Type	
+				boost::none,					// Predefined Type
+				boost::none						// Elevation with Flooring
+			);
+			
+			hierarchyHelper.addEntity(room);
 
 			roomnum++;
-
-			// Make a room
-
-
 		}
 
 
 	}
+
+	// add storey objects to the project
+	auto targetFile = cluster->getHelper(0)->getSourceFile();
+	for (auto it = hierarchyHelper.begin(); it != hierarchyHelper.end(); ++it)
+	{
+		auto hierarchyElement = *it;
+		auto hierarchyDataElement = hierarchyElement.second;
+		auto objectName = hierarchyDataElement->declaration().name();
+
+		// remove potential dublications made by the helper
+		// TODO remove all dependencies of building and owners as well
+		if (objectName == "IfcBuilding" || objectName == "IfcOwnerHistory") { continue; }
+
+		targetFile->addEntity(hierarchyDataElement);
+	}
+
 
 	outputFieldToFile();
 }
@@ -452,7 +488,7 @@ std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)
 	std::vector<int> buffer = { startIndx };
 	std::vector<int> totalRoom = { startIndx };
 
-	Assignment[startIndx] = 1;
+	Assignment_[startIndx] = 1;
 
 	bool isOutSide = false;
 
@@ -462,10 +498,10 @@ std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)
 		for (size_t j = 0; j < buffer.size(); j++)
 		{
 			int currentIdx = buffer[j];
-			voxel* currentBoxel = VoxelLookup[currentIdx];
+			voxel* currentBoxel = VoxelLookup_[currentIdx];
 			currentBoxel->AddRoomNumber(roomnum);
 
-			if (Assignment[currentIdx] == -1)
+			if (Assignment_[currentIdx] == -1)
 			{
 				continue;
 			}
@@ -478,7 +514,7 @@ std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)
 			for (size_t k = 0; k < neighbourIndx.size(); k++)
 			{
 				// exlude if already assigned
-				if (Assignment[neighbourIndx[k]] == 0) {
+				if (Assignment_[neighbourIndx[k]] == 0) {
 					bool dupli = false;
 					for (size_t l = 0; l < tempBuffer.size(); l++)
 					{
@@ -493,10 +529,10 @@ std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)
 					{
 						tempBuffer.emplace_back(neighbourIndx[k]);
 						totalRoom.emplace_back(neighbourIndx[k]);
-						Assignment[neighbourIndx[k]] = 1;
+						Assignment_[neighbourIndx[k]] = 1;
 					}
 				}
-				else if (Assignment[neighbourIndx[k]] == -1) {
+				else if (Assignment_[neighbourIndx[k]] == -1) {
 					bool dupli = false;
 
 					for (size_t l = 0; l < totalRoom.size(); l++)
@@ -521,7 +557,7 @@ std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)
 		for (size_t k = 0; k < totalRoom.size(); k++)
 		{
 			int currentIdx = totalRoom[k];
-			voxel* currentBoxel = VoxelLookup[currentIdx];
+			voxel* currentBoxel = VoxelLookup_[currentIdx];
 			if (!currentBoxel->getIsIntersecting())
 			{
 				currentBoxel->setOutside();
@@ -749,42 +785,6 @@ bool voxel::linearEqIntersection(std::vector<gp_Pnt> productPoints, std::vector<
 		}
 	}
 	return false;
-}
-
-bool voxel::makeOpenCascadeShape(double rotation)
-{
-	BRepBuilderAPI_Sewing sewer;
-
-	std::vector<std::vector<int>> intFaces = getVoxelFaces();
-	std::vector<gp_Pnt> pointList = getCornerPoints(rotation);
-
-	BRep_Builder brepBuilder;
-
-	TopoDS_Shell shell;
-	brepBuilder.MakeShell(shell);
-	TopoDS_Solid solid;
-	brepBuilder.MakeSolid(solid);
-
-	for (size_t j = 0; j < 6; j++)
-	{
-		gp_Pnt p0(pointList[intFaces[j][0]]);
-		gp_Pnt p1(pointList[intFaces[j][1]]);
-		gp_Pnt p2(pointList[intFaces[j][2]]);
-		gp_Pnt p3(pointList[intFaces[j][3]]);
-
-		TopoDS_Edge edge0 = BRepBuilderAPI_MakeEdge(p0, p1);
-		TopoDS_Edge edge1 = BRepBuilderAPI_MakeEdge(p1, p2);
-		TopoDS_Edge edge2 = BRepBuilderAPI_MakeEdge(p2, p3);
-		TopoDS_Edge edge3 = BRepBuilderAPI_MakeEdge(p3, p0);
-
-		TopoDS_Wire wire = BRepBuilderAPI_MakeWire(edge0, edge1, edge2, edge3);
-		TopoDS_Face face = BRepBuilderAPI_MakeFace(wire);
-		brepBuilder.Add(shell, face);
-	}
-
-	brepBuilder.Add(solid, shell);
-
-	openCascadeShape_ = solid;
 }
 
 bool voxel::checkIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle)

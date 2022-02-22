@@ -24,8 +24,6 @@ private:
 	BoostPoint3D center_;
 	double size_;
 
-	TopoDS_Shape openCascadeShape_;
-
 	std::vector<std::tuple<int, IfcSchema::IfcProduct*>> intersectingProducts;
 
 	// compute the signed volume
@@ -69,10 +67,6 @@ public:
 	bool linearEqIntersection(std::vector<gp_Pnt> productPoints, std::vector<gp_Pnt> voxelPoints);
 
 	bool getIsIntersecting() { return isIntersecting_; }
-
-	TopoDS_Shape getOpenCascadeShape() { return openCascadeShape_; }
-
-	bool makeOpenCascadeShape(double rotation);
 };
 
 class voxelfield {
@@ -94,25 +88,26 @@ private:
 	double planeRotation_ = 0;
 
 	// -1 is intersected 0 is not assigned 1..n is room assignement;
-	std::vector<int> Assignment;
-	std::map<int, voxel*> VoxelLookup;
+	std::vector<int> Assignment_;
+	std::map<int, voxel*> VoxelLookup_;
 	
 	std::vector<int> getNeighbours(int voxelIndx);
 
+	// transform coordinates 
 	template<typename T>
 	T linearToRelative(int i);
-
 	BoostPoint3D relPointToWorld(BoostPoint3D p);
 	BoostPoint3D relPointToWorld(int px, int py, int pz);
-
 	BoostPoint3D WorldPointToRel(BoostPoint3D p);
 
 	// create a group of voxels representing a rough room
 	std::vector<int> growRoom(int startIndx, int roomnum);
 
+	// generates the faces of the voxel that are needed to create a rough room shape
 	std::vector<TopoDS_Face> getPartialFaces(std::vector<int> roomIndx, int voxelIndx);
 
-	const TopoDS_Shape& SmoothSplitSolid(TopoDS_Solid roughRoomShape, std::vector<std::tuple<int, IfcSchema::IfcProduct*>> intersectionList);
+	// creates and adds a voxel object + checks with which products from the cluster it intersects
+	void addVoxel(int indx, helperCluster* cluster);
 
 	void outputFieldToFile();
 

@@ -10,6 +10,7 @@
 #include <ifcgeom/IfcGeom.h>
 #include <ifcgeom/IfcGeomRepresentation.h>
 #include <ifcgeom_schema_agnostic/kernel.h>
+#include <ifcgeom_schema_agnostic/Serialization.h>
 
 #include <memory>
 
