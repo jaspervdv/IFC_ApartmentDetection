@@ -1,4 +1,5 @@
 #include "helper.h"
+#include "floorProcessor.h"
 
 #include <GProp_GProps.hxx>
 #include <BRepGProp.hxx>

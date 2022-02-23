@@ -223,12 +223,12 @@ int main(int argc, char** argv) {
 
 	for (int i = 0; i < hCluster->getSize(); i++)
 	{
-		//hCluster->getHelper(i)->indexGeo();
+		hCluster->getHelper(i)->indexGeo();
 	}
 
-	//voxelfield* field = new voxelfield(hCluster);
+	voxelfield* field = new voxelfield(hCluster);
 
-	//field->makeRooms(hCluster);
+	field->makeRooms(hCluster);
 
 
 

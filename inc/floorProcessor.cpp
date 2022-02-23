@@ -611,42 +611,31 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 
 		targetFile->addEntity(hierarchyDataElement);
 	}
-
 }
 
-void floorProcessor::sortObjects(helper* data)
+void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr products)
 {
-	std::cout << "[INFO] Storey sorting file " << data->getName() << std::endl;
-
-	IfcParse::IfcFile*  sourcefile = data->getSourceFile();
+	IfcParse::IfcFile* sourcefile = data->getSourceFile();
 	auto kernel = data->getKernel();
 	double lengthMulti = data->getUnits()[0];
 
 	// make a vector with the height, spatial structure and a temp product  list
 	IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = sourcefile->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
 
-	std::vector<std::tuple<double, IfcSchema::IfcRelContainedInSpatialStructure*, IfcSchema::IfcProduct::list::ptr>> pairedContainers;
-
-	for (auto it= containers->begin(); it != containers->end(); ++it)
+	std::vector<std::tuple<double, IfcSchema::IfcRelContainedInSpatialStructure*>> pairedContainers;
+	for (auto it = containers->begin(); it != containers->end(); ++it)
 	{
 		IfcSchema::IfcRelContainedInSpatialStructure* structure = *it;
-		IfcSchema::IfcProduct::list::ptr container(new IfcSchema::IfcProduct::list);
 		double height = std::stod(structure->RelatingStructure()->data().getArgument(9)->toString()) * lengthMulti;
-		
+
 		pairedContainers.emplace_back(
-			std::make_tuple( 
+			std::make_tuple(
 				height,			// height
-				structure,		// spatial structure
-				container		// ifcproduct list
-			)																												
+				structure		// spatial structure
+			)
 		);
 	}
-
-
 	std::sort(pairedContainers.begin(), pairedContainers.end());
-
-	// get the elevation of all product in the model
-	IfcSchema::IfcProduct::list::ptr products = sourcefile->instances_by_type<IfcSchema::IfcProduct>();
 
 	for (auto it = products->begin(); it != products->end(); ++it)
 	{
@@ -654,18 +643,20 @@ void floorProcessor::sortObjects(helper* data)
 
 		if (!product->hasRepresentation()) { continue; }
 		if (product->data().type()->name() == "IfcSite") { continue; }
-		
+
 		bool heightFound = false;
 
 		auto representations = product->Representation()->Representations();
 
 		gp_Trsf trsf;
-		kernel->convert_placement(product->ObjectPlacement(), trsf);
+		if (product->hasObjectPlacement()) { kernel->convert_placement(product->ObjectPlacement(), trsf); }
 
-		double height = - 9999;
+		std::cout << "reached" << std::endl;
+
+		double height = -9999;
 
 		// floors are a special case due to them being placed based on their top elevation
-		
+
 		bool hasBBox = false;
 
 		if (product->data().type()->name() == "IfcSlab")
@@ -682,7 +673,8 @@ void floorProcessor::sortObjects(helper* data)
 
 					// move to OpenCASCADE
 					const TopoDS_Shape rShape = ob[0].Shape();
-					const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+					gp_Trsf placement = ob.at(0).Placement().Trsf();
+					const TopoDS_Shape aShape = rShape.Moved(trsf * placement); // location in global space
 
 					// set variables for top face selection
 					TopoDS_Face topFace;
@@ -750,10 +742,11 @@ void floorProcessor::sortObjects(helper* data)
 
 						//IfcGeom::IfcRepresentationShapeItems ob(kernel->convert(representationItems));
 						std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel->convert(representationItems));
-						
+
 						// move to OpenCASCADE
 						const TopoDS_Shape rShape = ob.get()->at(0).Shape();
-						const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
+						gp_Trsf placement = ob.get()->at(0).Placement().Trsf();
+						const TopoDS_Shape aShape = rShape.Moved(trsf * placement); // location in global space
 
 						// set variables for top face selection
 						TopoDS_Face topFace;
@@ -779,7 +772,7 @@ void floorProcessor::sortObjects(helper* data)
 
 		if (height == -9999) { continue; } // TODO what hits this!
 
-		int maxidx = (int) pairedContainers.size();
+		int maxidx = (int)pairedContainers.size();
 
 		// vind smallest distance to floor elevation
 		double smallestDistance = 1000;
@@ -787,29 +780,33 @@ void floorProcessor::sortObjects(helper* data)
 		for (int i = 0; i < maxidx; i++) {
 			auto currentTuple = pairedContainers[i];
 			double distance = height * lengthMulti - std::get<0>(currentTuple);
-			
-			if (distance < - 0 * lengthMulti) { break; }
+
+			if (distance < -0 * lengthMulti) { break; }
 
 			if (distance < smallestDistance)
 			{
 				smallestDistance = distance;
 				indxSmallestDistance = i;
-			} 
+			}
 
 			if (distance == 0) { break; }
 		}
 
-		std::get<2>(pairedContainers[indxSmallestDistance])->push(product);
-
+		auto d = std::get<1>(pairedContainers[indxSmallestDistance])->RelatedElements();
+		d.get()->push(product);
+		std::get<1>(pairedContainers[indxSmallestDistance])->setRelatedElements(d);
 	}
 
-	for (size_t i = 0; i < pairedContainers.size(); i++)
-	{
-		auto currentTuple = pairedContainers[i];
-		std::get<1>(currentTuple)->setRelatedElements(std::get<2>(currentTuple));
-	}
+}
 
+void floorProcessor::sortObjects(helper* data)
+{
+	std::cout << "[INFO] Storey sorting file " << data->getName() << std::endl;
 
+	// get the elevation of all product in the model
+	IfcSchema::IfcProduct::list::ptr products = data->getSourceFile()->instances_by_type<IfcSchema::IfcProduct>();
+
+	sortObjects(data, products);
 }
 
 floorProcessor::FloorStruct::FloorStruct(TopoDS_Face face, double area)

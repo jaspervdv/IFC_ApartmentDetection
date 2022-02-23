@@ -253,12 +253,15 @@ voxelfield::voxelfield(helperCluster* cluster)
 
 void voxelfield::makeRooms(helperCluster* cluster)
 {
-	// TODO get Room locations in memory
-	IfcSchema::IfcSpace::list::ptr rooms;
+	IfcSchema::IfcProduct::list::ptr roomProducts(new IfcSchema::IfcProduct::list);
+
+	// get Room locations in memory
+	std::vector<IfcSchema::IfcSpace::list::ptr> oldSpaces;
 
 	for (size_t i = 0; i < cluster->getSize(); i++)
 	{
-		//rooms.get()->push(cluster->getHelper(i)->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>());
+		IfcSchema::IfcSpace::list::ptr spaces = cluster->getHelper(i)->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>();
+		oldSpaces.emplace_back(spaces);
 	}
 
 	// pre make hierachy helper
@@ -363,8 +366,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				//return;
 			}
 
-
-
 			// get roomshape
 			// eliminate outside shape by Z values
 			double maxZ = -9999;
@@ -404,10 +405,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
 			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
 
-			if (solids.size() == 1)
+			if (solids.size() <= 1)
 			{
-				// room found
-				// TODO exit
+				continue;
 			}
 
 			std::vector<gp_Pnt> roomShapePoints;
@@ -436,12 +436,14 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			}
 			printFaces(solids[BiggestRoom]);
 
-			
-			IfcSchema::IfcProductRepresentation* roomRepresentation = IfcGeom::serialise(STRINGIFY(IfcSchema), solids[BiggestRoom], false)->as<IfcSchema::IfcProductRepresentation>();;
-			
-			if (roomRepresentation == 0) { continue; }
+			// get ifcplacement
 
+			
 			// Make a space object
+			IfcSchema::IfcProductRepresentation* roomRep = IfcGeom::serialise(STRINGIFY(IfcSchema), solids[BiggestRoom], false)->as<IfcSchema::IfcProductRepresentation>();
+			if (roomRep == 0) { continue; }
+			
+
 			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
 				IfcParse::IfcGlobalId(),		// GlobalId
 				0,								// OwnerHistory
@@ -449,23 +451,24 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				boost::none,					// Description
 				boost::none,					// Object type
 				0,								// Object Placement
-				roomRepresentation,				// Representation
+				roomRep,						// Representation
 				std::string("Spaaaace"),		// Long name
 				boost::none,					// Composition Type	
 				boost::none,					// Predefined Type
 				boost::none						// Elevation with Flooring
 			);
-			
-			hierarchyHelper.addEntity(room);
 
+			cluster->getHelper(0)->getSourceFile()->addEntity(room);
+
+			//hierarchyHelper.addEntity(room);
+			roomProducts.get()->push(room);
 			roomnum++;
 		}
-
-
 	}
 
 	// add storey objects to the project
 	auto targetFile = cluster->getHelper(0)->getSourceFile();
+
 	for (auto it = hierarchyHelper.begin(); it != hierarchyHelper.end(); ++it)
 	{
 		auto hierarchyElement = *it;
@@ -479,8 +482,20 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		targetFile->addEntity(hierarchyDataElement);
 	}
 
+	// delete all the original rooms in the file
+	for (size_t i = 0; i < oldSpaces.size(); i++)
+	{
+		auto clusterSpaces = oldSpaces[i];
 
-	outputFieldToFile();
+		for (IfcSchema::IfcSpace::list::it it = clusterSpaces->begin(); it != clusterSpaces->end(); ++it)
+		{
+			IfcSchema::IfcSpace* space = *it;
+			cluster->getHelper(i)->getSourceFile()->removeEntity(space);
+		}
+	}
+
+	floorProcessor::sortObjects(cluster->getHelper(0), roomProducts);
+	//outputFieldToFile();
 }
 
 std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)

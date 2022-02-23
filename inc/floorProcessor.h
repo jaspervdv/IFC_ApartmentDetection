@@ -103,6 +103,7 @@ public:
 	static void createStoreys(helper* data, std::vector<double> floorStoreys);
 
 	static void sortObjects(helper* data);
+	static void sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr products);
 
 	// TODO make private
 	static void printLevels(std::vector<double> levels);
