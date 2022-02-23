@@ -654,7 +654,6 @@ void floorProcessor::sortObjects(helper* data)
 
 		if (!product->hasRepresentation()) { continue; }
 		if (product->data().type()->name() == "IfcSite") { continue; }
-
 		
 		bool heightFound = false;
 
@@ -778,7 +777,7 @@ void floorProcessor::sortObjects(helper* data)
 			}
 		}
 
-		if (height == -9999) { return; }
+		if (height == -9999) { continue; } // TODO what hits this!
 
 		int maxidx = (int) pairedContainers.size();
 
