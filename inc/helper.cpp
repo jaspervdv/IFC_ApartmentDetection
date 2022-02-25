@@ -15,8 +15,6 @@ void printFaces(TopoDS_Shape shape)
 		faceList.emplace_back(TopoDS::Face(expl.Current()));
 	}
 
-
-
 	for (size_t i = 0; i < faceList.size(); i++)
 	{
 		for (expl.Init(faceList[i], TopAbs_VERTEX); expl.More(); expl.Next())
@@ -338,14 +336,14 @@ void helper::indexGeo()
 	// this indexing is done based on the rotated bboxes of the objects
 	// the bbox does thus comply with the model bbox but not with the actual objects original location
 
+	// add the floorslabs to the rtree
+	addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
+
 	// add the walls to the rtree
 	addObjectToIndex<IfcSchema::IfcWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcWall>());
 
 	// add the columns to the rtree TODO sweeps
 	addObjectToIndex<IfcSchema::IfcColumn::list::ptr>(file_->instances_by_type<IfcSchema::IfcColumn>());
-
-	// add the floorslabs to the rtree
-	addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
 
 	// add the beams to the rtree
 	addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());

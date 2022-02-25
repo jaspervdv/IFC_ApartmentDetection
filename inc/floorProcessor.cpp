@@ -639,6 +639,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 
 	for (auto it = products->begin(); it != products->end(); ++it)
 	{
+		std::cout << "c" << std::endl;
 		IfcSchema::IfcProduct* product = *it;
 
 		if (!product->hasRepresentation()) { continue; }
@@ -650,9 +651,6 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 
 		gp_Trsf trsf;
 		if (product->hasObjectPlacement()) { kernel->convert_placement(product->ObjectPlacement(), trsf); }
-
-		std::cout << "reached" << std::endl;
-
 		double height = -9999;
 
 		// floors are a special case due to them being placed based on their top elevation
@@ -739,10 +737,10 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 						geotype == "'Clipping'") {
 
 						IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
+						if (representationItems->data().type()->name() == "IfcFacetedBrepWithVoids") { break; } // TODO deal with outliers 
 
 						//IfcGeom::IfcRepresentationShapeItems ob(kernel->convert(representationItems));
 						std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel->convert(representationItems));
-
 						// move to OpenCASCADE
 						const TopoDS_Shape rShape = ob.get()->at(0).Shape();
 						gp_Trsf placement = ob.get()->at(0).Placement().Trsf();
@@ -769,6 +767,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 				}
 			}
 		}
+
 
 		if (height == -9999) { continue; } // TODO what hits this!
 

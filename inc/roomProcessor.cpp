@@ -1,5 +1,15 @@
 #include "roomProcessor.h"
 
+void WriteToSTEP(TopoDS_Solid shape) {
+	STEPControl_Writer writer;
+	std::cout << "r" << std::endl;
+
+	writer.Transfer(shape, STEPControl_ManifoldSolidBrep);
+	IFSelect_ReturnStatus stat = writer.Write("D:/Documents/Uni/Thesis/sources/Models/exports/step.stp");
+
+	std::cout << "stat: " << stat << std::endl;
+}
+
 TopoDS_Face makeFace(std::vector<gp_Pnt> voxelPointList, std::vector<int> pointFaceIndx) {
 	gp_Pnt p0(voxelPointList[pointFaceIndx[0]]);
 	gp_Pnt p1(voxelPointList[pointFaceIndx[1]]);
@@ -185,7 +195,7 @@ void voxelfield::addVoxel(int indx, helperCluster* cluster)
 void voxelfield::outputFieldToFile()
 {
 	std::ofstream storageFile;
-	storageFile.open("D:/Documents/Uni/Thesis/sources/Models/exports/voxels.txt", std::ios_base::app);
+	storageFile.open("D:/Documents/Uni/Thesis/sources/Models/exports/voxels.txt");
 	for (auto it = VoxelLookup_.begin(); it != VoxelLookup_.end(); ++ it )
 	{
 		std::vector<gp_Pnt> pointList = it->second->getCornerPoints(planeRotation_);
@@ -253,6 +263,7 @@ voxelfield::voxelfield(helperCluster* cluster)
 
 void voxelfield::makeRooms(helperCluster* cluster)
 {
+	GProp_GProps gprop;
 	IfcSchema::IfcProduct::list::ptr roomProducts(new IfcSchema::IfcProduct::list);
 
 	// get Room locations in memory
@@ -272,11 +283,12 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 	// asign rooms
 	int roomnum = 0;
+	int temps = 0;
 	for (int i = 0; i < totalVoxels_; i++)
 	{
 		if (Assignment_[i] == 0) // Find unassigned voxel
 		{
-			std::cout << "new" << std::endl;
+			std::cout << "new room nr: " << roomnum << std::endl;
 			std::vector<int> totalRoom = growRoom(i, roomnum);
 
 			std::cout << "build shape" << std::endl;
@@ -316,24 +328,26 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				}
 			}
 
-			brepBuilder.Add(roughRoomShape, shell);
+
 
 			std::cout << "simplefy" << std::endl;
 
 			// simplefy the fused voxelshape
-			ShapeUpgrade_UnifySameDomain unif(roughRoomShape, Standard_True, Standard_True, Standard_True);
+			ShapeUpgrade_UnifySameDomain unif(shell, Standard_True, Standard_True, Standard_True);
 			unif.SetSafeInputMode(Standard_False);
 			unif.AllowInternalEdges(Standard_False);
-			unif.Build();
-			TopoDS_Shape roomShape = unif.Shape();
 
-			std::cout << "split" << std::endl;
+			unif.Build();
+			TopoDS_Shape smoothedShell = unif.Shape();
+
+			brepBuilder.Add(roughRoomShape, smoothedShell);
+			roughRoomShape.Closed(Standard_True);
 
 			// intersect roomshape with walls 
 			BOPAlgo_Splitter aSplitter;
 
 			TopTools_ListOfShape aLSObjects;
-			aLSObjects.Append(roomShape);
+			aLSObjects.Append(roughRoomShape);
 			TopTools_ListOfShape aLSTools;
 
 			for (size_t j = 0; j < intersectionList.size(); j++)
@@ -348,7 +362,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			aSplitter.SetRunParallel(Standard_True);
 			aSplitter.SetFuzzyValue(1.e-5);
-			aSplitter.SetNonDestructive(Standard_True);
+			aSplitter.SetNonDestructive(Standard_False);
 
 			aSplitter.Perform();
 
@@ -359,32 +373,30 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			std::vector<TopoDS_Solid> solids;
 			for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) { solids.emplace_back(TopoDS::Solid(expl.Current())); }
 
-			if (solids.size() == 1)
+			if (solids.size() == 1) // TODO make alternative prosess if failed!
 			{
-				std::cout << "endsolid" << std::endl;
-				//printFaces(solids[0]);
-				//return;
+				WriteToSTEP(solids[0]);
+
 			}
 
 			// get roomshape
+			int BiggestRoom = -1;
+ 
 			// eliminate outside shape by Z values
 			double maxZ = -9999;
 			double minZ = 9999;
 
-			for (size_t j = 0; j < solids.size(); j++)
-			{
-				for (expl.Init(solids[j], TopAbs_VERTEX); expl.More(); expl.Next()) {
-					gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
+			for (expl.Init(roughRoomShape, TopAbs_VERTEX); expl.More(); expl.Next()) {
+				gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
 
+				if (maxZ == -9999) { maxZ = p.Z(); }
+				else if (maxZ < p.Z()) { maxZ = p.Z(); }
 
-					if (maxZ == -9999) { maxZ = p.Z(); }
-					else if (maxZ < p.Z()) { maxZ = p.Z(); }
+				if (minZ == 9999) { minZ = p.Z(); }
+				else if (minZ > p.Z()) { minZ = p.Z(); }
 
-					if (minZ == 9999) { minZ = p.Z(); }
-					else if (minZ > p.Z()) { minZ = p.Z(); }
-
-				}
 			}
+			
 
 			std::vector<int> outSideIndx;
 			outSideIndx.clear();
@@ -403,42 +415,47 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			}
 
 			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
-			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
+			//for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
 
 			if (solids.size() <= 1)
 			{
-				continue;
-			}
+				BiggestRoom = 0;
+			} 
+			else {
 
-			std::vector<gp_Pnt> roomShapePoints;
-			roomShapePoints.clear();
+				std::vector<gp_Pnt> roomShapePoints;
+				roomShapePoints.clear();
 
-			// TODO search for encapsulation
+				// TODO search for encapsulation
 
-			// filter for volume 
-			double maxVolume = 0;
-			int BiggestRoom;
+				// filter for volume 
+				double maxVolume = 0;
 
-			GProp_GProps gprop;
 
-			std::cout << solids.size() << std::endl;
 
-			for (size_t j = 0; j < solids.size(); j++)
-			{
-				BRepGProp::VolumeProperties(solids[j], gprop);
-				double volume = gprop.Mass();
 
-				if (maxVolume < volume)
+				if (temps >= 4)
 				{
-					maxVolume = volume;
-					BiggestRoom = j;
+					std::cout << "solid size: " << solids.size() << std::endl;
+					//printFaces(solids[8]);
+				}
+				temps++;
+
+				for (size_t j = 0; j < solids.size(); j++)
+				{
+					BRepGProp::VolumeProperties(solids[j], gprop);
+					double volume = gprop.Mass();
+
+					std::cout << volume << std::endl;
+
+					if (maxVolume < volume)
+					{
+						maxVolume = volume;
+						BiggestRoom = j;
+					}
 				}
 			}
-			printFaces(solids[BiggestRoom]);
 
-			// get ifcplacement
-
-			
 			// Make a space object
 			IfcSchema::IfcProductRepresentation* roomRep = IfcGeom::serialise(STRINGIFY(IfcSchema), solids[BiggestRoom], false)->as<IfcSchema::IfcProductRepresentation>();
 			if (roomRep == 0) { continue; }
@@ -448,7 +465,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				IfcParse::IfcGlobalId(),		// GlobalId
 				0,								// OwnerHistory
 				std::string("Space"),			// Name
-				boost::none,					// Description
+				std::string(std::to_string(roomnum)),	// Description
 				boost::none,					// Object type
 				0,								// Object Placement
 				roomRep,						// Representation
@@ -460,26 +477,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			cluster->getHelper(0)->getSourceFile()->addEntity(room);
 
-			//hierarchyHelper.addEntity(room);
 			roomProducts.get()->push(room);
 			roomnum++;
 		}
-	}
-
-	// add storey objects to the project
-	auto targetFile = cluster->getHelper(0)->getSourceFile();
-
-	for (auto it = hierarchyHelper.begin(); it != hierarchyHelper.end(); ++it)
-	{
-		auto hierarchyElement = *it;
-		auto hierarchyDataElement = hierarchyElement.second;
-		auto objectName = hierarchyDataElement->declaration().name();
-
-		// remove potential dublications made by the helper
-		// TODO remove all dependencies of building and owners as well
-		if (objectName == "IfcBuilding" || objectName == "IfcOwnerHistory") { continue; }
-
-		targetFile->addEntity(hierarchyDataElement);
 	}
 
 	// delete all the original rooms in the file
@@ -493,9 +493,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			cluster->getHelper(i)->getSourceFile()->removeEntity(space);
 		}
 	}
-
+	outputFieldToFile();
 	floorProcessor::sortObjects(cluster->getHelper(0), roomProducts);
-	//outputFieldToFile();
+
 }
 
 std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)

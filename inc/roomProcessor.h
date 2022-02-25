@@ -10,6 +10,9 @@
 #include <BOPAlgo_Splitter.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
+#include <STEPControl_Writer.hxx>
+#include <STEPControl_StepModelType.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
