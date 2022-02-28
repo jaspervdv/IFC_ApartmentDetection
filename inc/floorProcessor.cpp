@@ -584,6 +584,14 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 		storey->setName("Floor");
 		storey->setDescription("Automatically generated floor");
 
+		// placement
+		//IfcSchema::IfcCartesianPoint* anchor = new IfcSchema::IfcCartesianPoint({ 0.0, 0.0, floorStoreys[i] });
+		//IfcSchema::IfcDirection* dir = new IfcSchema::IfcDirection({ 0,1,0 });
+		//IfcSchema::IfcAxis2Placement3D placement(anchor, dir, dir);
+		//IfcSchema::IfcObjectPlacement* loc = new IfcSchema::IfcObjectPlacement(placement);
+
+		//storey->setObjectPlacement();
+
 		IfcSchema::IfcProduct::list::ptr parts(new IfcSchema::IfcProduct::list);
 
 		// make container object

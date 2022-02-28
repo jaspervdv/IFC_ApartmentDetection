@@ -13,6 +13,7 @@
 #include <STEPControl_Writer.hxx>
 #include <STEPControl_StepModelType.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
+#include <BRepBuilderAPI_Sewing.hxx>
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -61,6 +62,8 @@ public:
 	std::vector<int> getRoomNumbers() { return roomnums; }
 
 	bool getIsInside() { return isInside; }
+
+	BoostPoint3D getCenterPoint() { return center_; }
 
 	// add product to the voxel
 	void addProduct(std::tuple<int, IfcSchema::IfcProduct*> product) { intersectingProducts.emplace_back(product); }
