@@ -301,11 +301,10 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	{
 		if (Assignment_[i] == 0) // Find unassigned voxel
 		{
-			std::cout << "new room nr: " << roomnum << std::endl;
 			std::vector<int> totalRoom = growRoom(i, roomnum);
-
-			std::cout << "build shape" << std::endl;
 			if (totalRoom.size() == 0) { continue; }
+
+			std::cout << "new room nr: " << roomnum + 1 << std::endl;
 
 			// fuse the voxels into one shape
 			std::vector<std::tuple<int, IfcSchema::IfcProduct*>> intersectionList;
@@ -391,19 +390,16 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			TopoDS_Edge edge10 = BRepBuilderAPI_MakeEdge(p2, p4);
 			TopoDS_Edge edge11 = BRepBuilderAPI_MakeEdge(p1, p5);
 
-			TopoDS_Face face1 = BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge0, edge1, edge2, edge3));
-			TopoDS_Face face2 = BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge4, edge5, edge6, edge7));
-			TopoDS_Face face3 = BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge0, edge8, edge5, edge11));
-			TopoDS_Face face4 = BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge3, edge9, edge6, edge8));
-			TopoDS_Face face5 = BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge2, edge10, edge7, edge9));
-			TopoDS_Face face6 = BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge1, edge11, edge4, edge10));
+			std::vector<TopoDS_Face> faceList;
 
-			brepSewer.Add(face1);
-			brepSewer.Add(face2);
-			brepSewer.Add(face3);
-			brepSewer.Add(face4);
-			brepSewer.Add(face5);
-			brepSewer.Add(face6);
+			faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge0, edge1, edge2, edge3)));
+			faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge4, edge5, edge6, edge7)));
+			faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge0, edge8, edge5, edge11)));
+			faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge3, edge9, edge6, edge8)));
+			faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge2, edge10, edge7, edge9)));
+			faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge1, edge11, edge4, edge10)));
+
+			for (size_t k = 0; k < faceList.size(); k++) { brepSewer.Add(faceList[k]); }
 
 			brepSewer.Perform();
 
@@ -438,7 +434,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			}
 
-			std::cout << "base geo " << sizedRoomShape.Checked() << std::endl;
 			aSplitter.SetArguments(aLSObjects);
 			aSplitter.SetTools(aLSTools);
 
@@ -546,8 +541,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					}
 				}
 			}
-
-			WriteToSTEP(solids[BiggestRoom]);
 
 			// Make a space object
 			IfcSchema::IfcProductRepresentation* roomRep = IfcGeom::serialise(STRINGIFY(IfcSchema), solids[BiggestRoom], false)->as<IfcSchema::IfcProductRepresentation>();

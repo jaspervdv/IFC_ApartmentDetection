@@ -647,7 +647,6 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 
 	for (auto it = products->begin(); it != products->end(); ++it)
 	{
-		std::cout << "c" << std::endl;
 		IfcSchema::IfcProduct* product = *it;
 
 		if (!product->hasRepresentation()) { continue; }
