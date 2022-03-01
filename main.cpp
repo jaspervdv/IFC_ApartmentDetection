@@ -43,9 +43,9 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/rac_basic_sample_project.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_ARC_DigitalHub.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
@@ -222,6 +222,42 @@ int main(int argc, char** argv) {
 	}
 
 	std::cout << std::endl;
+
+	if (sourcePathArray.size() != 1)
+	{
+		while (true)
+		{
+			bool validInput = true;
+			std::string stringNum = "";
+
+			std::cout << "Please enter number of the target model for the spaces/rooms" << std::endl;
+			for (size_t i = 0; i < fileNames.size(); i++) { std::cout << i + 1 << ": " << fileNames[i] << std::endl; }
+			std::cout << "Num: ";
+			std::cin >> stringNum;
+
+			for (size_t i = 0; i < stringNum.size(); i++)
+			{
+				if (!std::isdigit(stringNum[i]))
+				{
+					validInput = false;
+				}
+			}
+
+			if (validInput)
+			{
+				int roomIndx = std::stoi(stringNum) - 1;
+
+				if (roomIndx >= 0) { 
+					hCluster->getHelper(roomIndx)->setHasRooms();
+					break;
+				}
+			}
+			std::cout << "\n [INFO] Please enter a valid number! \n" << std::endl;
+		}
+	}
+	else {
+		hCluster->getHelper(0)->setHasRooms();
+	}
 
 	for (int i = 0; i < hCluster->getSize(); i++)
 	{

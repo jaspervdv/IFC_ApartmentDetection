@@ -276,6 +276,24 @@ voxelfield::voxelfield(helperCluster* cluster)
 
 void voxelfield::makeRooms(helperCluster* cluster)
 {
+	int roomLoc = -1;
+
+	// find helper containing the room objects
+	for (size_t i = 0; i < cluster->getSize(); i++)
+	{
+		if (cluster->getHelper(i)->getHasRoom())
+		{
+			roomLoc = i;
+			break;
+		}
+	}
+
+	if (roomLoc == -1)
+	{
+		std::cout << "[WARNING] cannot find valid room storing model" << std::endl;
+		return;
+	}
+
 	GProp_GProps gprop;
 	IfcSchema::IfcProduct::list::ptr roomProducts(new IfcSchema::IfcProduct::list);
 
@@ -431,14 +449,13 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					auto s = TopoDS::Solid(expl.Current());
 					aLSTools.Append(s);
 				}
-
 			}
 
 			aSplitter.SetArguments(aLSObjects);
 			aSplitter.SetTools(aLSTools);
 
 			aSplitter.SetRunParallel(Standard_True);
-			aSplitter.SetFuzzyValue(1.e-5);
+			aSplitter.SetFuzzyValue(0.001);
 			aSplitter.SetNonDestructive(Standard_False);
 
 			aSplitter.Perform();
@@ -476,12 +493,15 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					else if (shapeMinZ > p.Z()) { shapeMinZ = p.Z(); }
 				}
 
-				if (shapeMaxZ - shapeMinZ < 2)
+				if (shapeMaxZ - shapeMinZ < 1)
 				{
 					outSideIndx.emplace_back(j);
 				}
 
 			}
+			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
+			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
+			outSideIndx.clear();
 
 
 			// eliminate outside shape by Z values
@@ -504,7 +524,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				for (expl.Init(solids[j], TopAbs_VERTEX); expl.More(); expl.Next()) {
 					gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
 
-					if (p.Z() == maxZ || p.Z() == minZ)
+					if (p.Z() >= maxZ || p.Z() <= minZ)
 					{
 						outSideIndx.emplace_back(j);
 						break;
@@ -513,7 +533,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			}
 
 			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
-			//for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
+			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
 
 			if (solids.size() <= 1)
 			{
@@ -546,19 +566,38 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			IfcSchema::IfcProductRepresentation* roomRep = IfcGeom::serialise(STRINGIFY(IfcSchema), solids[BiggestRoom], false)->as<IfcSchema::IfcProductRepresentation>();
 			if (roomRep == 0) { continue; }
 
+#ifdef USE_IFC4
 			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
-				IfcParse::IfcGlobalId(),		// GlobalId
-				0,								// OwnerHistory
-				std::string("Space"),			// Name
-				std::string(std::to_string(roomnum)),	// Description
-				boost::none,					// Object type
-				0,							// Object Placement
-				roomRep,						// Representation
-				std::string("Spaaaace"),		// Long name
-				boost::none,					// Composition Type	
-				boost::none,					// Predefined Type
-				boost::none						// Elevation with Flooring
+				IfcParse::IfcGlobalId(),														// GlobalId
+				0,																				// OwnerHistory
+				std::string("Space"),															// Name
+				std::string(std::to_string(roomnum)),											// Description
+				boost::none,																	// Object type
+				0,																				// Object Placement
+				roomRep,																		// Representation
+				std::string("Spaaaace"),														// Long name
+				IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT,			// Composition Type	
+				boost::none,																	// Predefined Type
+				boost::none																		// Elevation with Flooring
 			);
+#else
+			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
+				IfcParse::IfcGlobalId(),														// GlobalId
+				0,																				// OwnerHistory
+				std::string("Space"),															// Name
+				std::string(std::to_string(roomnum)),											// Description
+				boost::none,																	// Object type
+				0,																				// Object Placement
+				roomRep,																		// Representation
+				std::string("Spaaaace"),														// Long name
+				IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT,			// Composition Type	
+				IfcSchema::IfcInternalOrExternalEnum::IfcInternalOrExternal_INTERNAL,			// Interior or exterior space
+				boost::none																		// Elevation with Flooring
+			);
+#endif // USE_IFC4
+
+
+
 
 			// TODO get relative placement
 
@@ -567,7 +606,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 
 
-			cluster->getHelper(0)->getSourceFile()->addEntity(room);
+			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			roomProducts.get()->push(room);
 			roomnum++;
 		}
@@ -585,7 +624,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		}
 	}
 	outputFieldToFile();
-	floorProcessor::sortObjects(cluster->getHelper(0), roomProducts);
+	floorProcessor::sortObjects(cluster->getHelper(roomLoc), roomProducts);
 
 }
 

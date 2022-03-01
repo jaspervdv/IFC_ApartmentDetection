@@ -1,4 +1,10 @@
+#define USE_IFC4
+
+#ifdef USE_IFC4
 #define IfcSchema Ifc4
+#else
+#define IfcSchema Ifc2x3
+#endif // USE_IFC4
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -86,6 +92,7 @@ private:
 	bool isConstruct = false; 
 	bool isPartial = false;
 	bool hasGeo = false;
+	bool hasRooms = false;
 
 	gp_Pnt lllPoint_;
 	gp_Pnt urrPoint_;
@@ -171,6 +178,8 @@ public:
 
 	bool getHasGeo() { return hasGeo; }
 
+	bool getHasRoom() { return hasRooms; }
+
 	gp_Pnt getLllPoint() { return lllPoint_; }
 
 	gp_Pnt getUrrPoint() { return urrPoint_; }
@@ -192,6 +201,8 @@ public:
 	void setPath(std::string path) { path_ = path; }
 
 	void setName(std::string name) { fileName_ = name; }
+
+	void setHasRooms() { hasRooms = true; }
 
 	//TODO implement
 	void whipeObject(IfcSchema::IfcProduct* product);
