@@ -493,7 +493,7 @@ std::vector<double> floorProcessor::computeFloorElevations(std::vector<helper*> 
 			if (tempFloorElevation.size() != 0) { return tempFloorElevation; }
 			else {
 				std::cout << "[WARNING] No storey elevations can be found in the supplied IFC file!" << std::endl;
-				break;
+				return {};
 			}
 		}
 	}
@@ -764,6 +764,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 							TopoDS_Face face = TopoDS::Face(expl.Current());
 							// select floor top face
 							double faceHeight = face.Location().Transformation().TranslationPart().Z();
+
 
 							if (faceHeight < lowHeight) { lowHeight = faceHeight; }
 						}

@@ -215,17 +215,17 @@ void voxelfield::outputFieldToFile()
 
 		auto products = it->second->getProducts();
 
-		if (it->second->getRoomNumbers().size() == 0) { continue; }
-		if (!it->second->getIsInside()) { continue; }
-		//if (!it->second->getIsIntersecting()) { continue; }
+		//if (it->second->getRoomNumbers().size() == 0) { continue; }
+		//if (!it->second->getIsInside()) { continue; }
+		if (!it->second->getIsIntersecting()) { continue; }
 
 		for (size_t k = 0; k < pointList.size(); k++)
 		{
 			storageFile << pointList[k].X() << ", " << pointList[k].Y() << ", " << pointList[k].Z() << std::endl;
 		}
 
-		storageFile << it->second->getRoomNumbers().back() << std::endl;
-		//storageFile << "1" << std::endl;
+		//storageFile << it->second->getRoomNumbers().back() << std::endl;
+		storageFile << "1" << std::endl;
 
 		storageFile << "\n";
 	}
@@ -277,6 +277,7 @@ voxelfield::voxelfield(helperCluster* cluster)
 void voxelfield::makeRooms(helperCluster* cluster)
 {
 	int roomLoc = -1;
+	double unitScale = 1;
 
 	// find helper containing the room objects
 	for (size_t i = 0; i < cluster->getSize(); i++)
@@ -284,6 +285,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		if (cluster->getHelper(i)->getHasRoom())
 		{
 			roomLoc = i;
+			unitScale = 1/cluster->getHelper(i)->getLengthMultiplier();
 			break;
 		}
 	}
@@ -443,11 +445,11 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			{
 				int helperNum = std::get<0>(intersectionList[j]);
 				IfcSchema::IfcProduct* product = std::get<1>(intersectionList[j]);
-				//aLSTools.Append(cluster->getHelper(helperNum)->getObjectShape(product));
+				aLSTools.Append(cluster->getHelper(helperNum)->getObjectShape(product));
 
 				for (expl.Init(cluster->getHelper(helperNum)->getObjectShape(product), TopAbs_SOLID); expl.More(); expl.Next()) {
 					auto s = TopoDS::Solid(expl.Current());
-					aLSTools.Append(s);
+					//aLSTools.Append(s);
 				}
 			}
 
@@ -461,7 +463,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			aSplitter.Perform();
 
 			const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
-
+			
 			// get roomshape
 			std::vector<TopoDS_Solid> solids;
 			for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) { solids.emplace_back(TopoDS::Solid(expl.Current())); }
@@ -473,7 +475,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			// get roomshape
 			int BiggestRoom = -1;
-
 
 			std::vector<int> outSideIndx;
 			outSideIndx.clear();
@@ -502,7 +503,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
 			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
 			outSideIndx.clear();
-
 
 			// eliminate outside shape by Z values
 			double maxZ = -9999;
@@ -563,8 +563,16 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			}
 
 			// Make a space object
-			IfcSchema::IfcProductRepresentation* roomRep = IfcGeom::serialise(STRINGIFY(IfcSchema), solids[BiggestRoom], false)->as<IfcSchema::IfcProductRepresentation>();
-			if (roomRep == 0) { continue; }
+			TopoDS_Shape UnitedScaledRoom = solids[BiggestRoom];
+			if (unitScale != 1)
+			{
+				gp_Trsf UnitScaler;
+				UnitScaler.SetScale({ 0.0, 0.0, 0.0 }, unitScale);
+				UnitedScaledRoom = BRepBuilderAPI_Transform(solids[BiggestRoom], UnitScaler).ModifiedShape(solids[BiggestRoom]);
+			}
+
+			IfcSchema::IfcProductRepresentation* roomRep = IfcGeom::serialise(STRINGIFY(IfcSchema), UnitedScaledRoom, false)->as<IfcSchema::IfcProductRepresentation>();
+			if (roomRep == 0) { std::cout << "wa" << std::endl; continue; }
 
 #ifdef USE_IFC4
 			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
@@ -595,9 +603,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				boost::none																		// Elevation with Flooring
 			);
 #endif // USE_IFC4
-
-
-
 
 			// TODO get relative placement
 

@@ -17,12 +17,14 @@ void printFaces(TopoDS_Shape shape)
 
 	for (size_t i = 0; i < faceList.size(); i++)
 	{
+		std::cout << "Start of Face" << std::endl;
 		for (expl.Init(faceList[i], TopAbs_VERTEX); expl.More(); expl.Next())
 		{
 			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
 			gp_Pnt p = BRep_Tool::Pnt(vertex);
 			printPoint(p);
 		}
+		std::cout << "End of Face" << std::endl;
 		std::cout << std::endl;
 	}
 	//std::cout << std::endl;
@@ -161,7 +163,8 @@ std::vector<gp_Pnt> helper::getAllPoints(IfcSchema::IfcProduct::list::ptr produc
 		std::vector<gp_Pnt> temp = getObjectPoints(product);
 		if (temp.size() > 1);
 		{
-			for (size_t i = 0; i < temp.size(); i++) { pointList.emplace_back(temp[i]); }
+			for (size_t i = 0; i < temp.size(); i++) { pointList.emplace_back(temp[i]); 
+			}
 		}
 		temp.clear();
 	}
@@ -350,6 +353,8 @@ void helper::indexGeo()
 
 	// add the curtain walls to the rtree
 	addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
+	addObjectToIndex<IfcSchema::IfcPlate::list::ptr>(file_->instances_by_type<IfcSchema::IfcPlate>());
+	addObjectToIndex<IfcSchema::IfcMember::list::ptr>(file_->instances_by_type<IfcSchema::IfcMember>());
 
 	// add doors to the rtree (for the appartment detection)
 	addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
@@ -454,7 +459,7 @@ std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product
 		pointList.emplace_back(p);
 	}
 
-	if (sortEdges) { return pointList; }
+	if (!sortEdges) { return pointList; }
 
 	std::vector<gp_Pnt> pointListSmall;
 	for (size_t i = 0; i < pointList.size(); i++)
