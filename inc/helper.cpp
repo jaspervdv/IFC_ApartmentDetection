@@ -4,6 +4,10 @@ void printPoint(gp_Pnt p) {
 	std::cout << p.X() << ", " << p.Y() << ", " << p.Z() << ", " << std::endl;
 }
 
+void printPoint(BoostPoint3D p) {
+	std::cout << bg::get<0>(p) << ", " << bg::get<1>(p) << ", " << bg::get<2>(p) << ", " << std::endl;
+}
+
 void printFaces(TopoDS_Shape shape)
 {
 	//std::cout << "Shape:" << std::endl;
@@ -30,10 +34,6 @@ void printFaces(TopoDS_Shape shape)
 	//std::cout << std::endl;
 }
 
-void printPoint(BoostPoint3D p) {
-	std::cout << bg::get<0>(p) << ", " << bg::get<1>(p) << ", " << bg::get<2>(p) << ", " << std::endl;
-}
-
 
 gp_Pnt rotatePointWorld(gp_Pnt p, double angle) {
 	double pX = p.X();
@@ -41,6 +41,14 @@ gp_Pnt rotatePointWorld(gp_Pnt p, double angle) {
 	double pZ = p.Z();
 
 	return gp_Pnt(pX * cos(angle) - pY * sin(angle), pY * cos(angle) + pX * sin(angle), pZ);
+}
+
+BoostPoint3D rotatePointWorld(BoostPoint3D p, double angle) {
+	double pX = bg::get<0>(p);
+	double pY = bg::get<1>(p);
+	double pZ = bg::get<2>(p);
+
+	return BoostPoint3D(pX * cos(angle) - pY * sin(angle), pY * cos(angle) + pX * sin(angle), pZ);
 }
 
 std::tuple<gp_Pnt, gp_Pnt, double> rotatedBBoxDiagonal(std::vector<gp_Pnt> pointList, double angle) {

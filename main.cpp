@@ -38,7 +38,7 @@ std::vector<std::string> GetSources() {
 
 	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
-	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/box_60.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/simple_models/box_60.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/simple_rooms.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/curtainWall_1.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/wall_curtain_1.ifc"
@@ -47,7 +47,8 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_ARC_DigitalHub.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"

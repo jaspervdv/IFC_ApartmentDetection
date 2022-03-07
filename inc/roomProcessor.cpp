@@ -311,6 +311,18 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	// pre make hierachy helper
 	IfcHierarchyHelper<IfcSchema> hierarchyHelper;
 
+	// get storey elevations from file
+	IfcSchema::IfcBuildingStorey::list::ptr buildingStoreys = cluster->getHelper(roomLoc)->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
+	std::vector<const IfcSchema::IfcBuildingStorey*> storeys;
+	std::vector<double> elevations;
+
+	for (IfcSchema::IfcBuildingStorey::list::it it = buildingStoreys->begin(); it != buildingStoreys->end(); ++it)
+	{
+		const IfcSchema::IfcBuildingStorey* storey = *it;
+		storeys.emplace_back(storey);
+		elevations.emplace_back(storey->Elevation() * unitScale);
+	}
+
 	// test voxel for intersection and add voxel objects to the voxelfield
 	for (int i = 0; i < totalVoxels_; i++) { addVoxel(i, cluster); }
 
@@ -345,28 +357,16 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			for (size_t j = 1; j < totalRoom.size(); j++)
 			{
 				voxel* currentBoxel = VoxelLookup_[totalRoom[j]];
-				auto center = currentBoxel->getCenterPoint();
-
-				if (bg::get<0>(center) > urr.X() || bg::get<1>(center) > urr.Y() || bg::get<2>(center) > urr.Z())
+				std::vector<gp_Pnt> cornerPoints = currentBoxel->getCornerPoints(planeRotation_);
+				for (size_t k = 0; k < cornerPoints.size(); k++)
 				{
-					std::vector<gp_Pnt> cornerPoints = currentBoxel->getCornerPoints(planeRotation_);
-					for (size_t k = 0; k < cornerPoints.size(); k++)
-					{
-						auto currentCorner = cornerPoints[k];
-						if (urr.X() < currentCorner.X()) { urr.SetX(currentCorner.X()); }
-						if (urr.Y() < currentCorner.Y()) { urr.SetY(currentCorner.Y()); }
-						if (urr.Z() < currentCorner.Z()) { urr.SetZ(currentCorner.Z()); }
-					}
-				}
-				else if (bg::get<0>(center) < lll.X() || bg::get<1>(center) < lll.Y() || bg::get<2>(center) < lll.Z()) {
-					std::vector<gp_Pnt> cornerPoints = currentBoxel->getCornerPoints(planeRotation_);
-					for (size_t k = 0; k < cornerPoints.size(); k++)
-					{
-						auto currentCorner = cornerPoints[k];
-						if (lll.X() > currentCorner.X()) { lll.SetX(currentCorner.X()); }
-						if (lll.Y() > currentCorner.Y()) { lll.SetY(currentCorner.Y()); }
-						if (lll.Z() > currentCorner.Z()) { lll.SetZ(currentCorner.Z()); }
-					}
+					auto currentCorner = cornerPoints[k];
+					if (urr.X() < currentCorner.X()) { urr.SetX(currentCorner.X()); }
+					if (urr.Y() < currentCorner.Y()) { urr.SetY(currentCorner.Y()); }
+					if (urr.Z() < currentCorner.Z()) { urr.SetZ(currentCorner.Z()); }
+					if (lll.X() > currentCorner.X()) { lll.SetX(currentCorner.X()); }
+					if (lll.Y() > currentCorner.Y()) { lll.SetY(currentCorner.Y()); }
+					if (lll.Z() > currentCorner.Z()) { lll.SetZ(currentCorner.Z()); }
 				}
 
 				auto productList = currentBoxel->getProducts();
@@ -430,7 +430,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			BRepGProp::VolumeProperties(roughRoomShape, gprop);
 
 			gp_Trsf scaler;
-			scaler.SetScale(gprop.CentreOfMass(), 1.1);
+			scaler.SetScale(gprop.CentreOfMass(), 1);
 			TopoDS_Shape sizedRoomShape = BRepBuilderAPI_Transform(roughRoomShape, scaler).ModifiedShape(roughRoomShape);
 
 			// intersect roomshape with walls 
@@ -446,11 +446,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				int helperNum = std::get<0>(intersectionList[j]);
 				IfcSchema::IfcProduct* product = std::get<1>(intersectionList[j]);
 				aLSTools.Append(cluster->getHelper(helperNum)->getObjectShape(product));
-
-				for (expl.Init(cluster->getHelper(helperNum)->getObjectShape(product), TopAbs_SOLID); expl.More(); expl.Next()) {
-					auto s = TopoDS::Solid(expl.Current());
-					//aLSTools.Append(s);
-				}
 			}
 
 			aSplitter.SetArguments(aLSObjects);
@@ -463,14 +458,14 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			aSplitter.Perform();
 
 			const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
-			
+
 			// get roomshape
 			std::vector<TopoDS_Solid> solids;
 			for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) { solids.emplace_back(TopoDS::Solid(expl.Current())); }
 
-			if (solids.size() <= 1) // TODO make alternative prosess if failed!
+			if (solids.size() == 1)
 			{
-				std::cout << "error" << std::endl;
+				continue;
 			}
 
 			// get roomshape
@@ -571,6 +566,37 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				UnitedScaledRoom = BRepBuilderAPI_Transform(solids[BiggestRoom], UnitScaler).ModifiedShape(solids[BiggestRoom]);
 			}
 
+			// find correct storey
+			double lowX = 9999;
+			double lowY = 9999;
+			double lowZ = 9999;
+
+			for (expl.Init(UnitedScaledRoom, TopAbs_VERTEX); expl.More(); expl.Next()) {
+				gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
+				if (p.X() < lowZ) { lowX = p.X(); }
+				if (p.Y() < lowZ) { lowY = p.Y(); }
+				if (p.Z() < lowZ) { lowZ = p.Z(); }
+			}
+
+			double elevDistance = 9999;
+			int storeyIndx = 0;
+			for (size_t j = 0; j < elevations.size(); j++)
+			{
+				double d = elevations[j] - lowZ;
+				if (d < elevDistance && d >= 0)
+				{
+					storeyIndx = j;
+					elevDistance = d;
+				}
+			}
+
+			IfcSchema::IfcLocalPlacement* relativeLoc = hierarchyHelper.addLocalPlacement(0, lowX, lowY, lowZ);
+			auto t = cluster->getHelper(roomLoc)->getSourceFile()->addEntity(relativeLoc)->as<IfcSchema::IfcLocalPlacement>();
+
+			gp_Trsf relativeMovement;
+			relativeMovement.SetTranslation({ 0,0,0 }, { -lowX, -lowY, -lowZ });
+			UnitedScaledRoom.Move(relativeMovement);
+
 			IfcSchema::IfcProductRepresentation* roomRep = IfcGeom::serialise(STRINGIFY(IfcSchema), UnitedScaledRoom, false)->as<IfcSchema::IfcProductRepresentation>();
 			if (roomRep == 0) { std::cout << "wa" << std::endl; continue; }
 
@@ -581,7 +607,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				std::string("Space"),															// Name
 				std::string(std::to_string(roomnum)),											// Description
 				boost::none,																	// Object type
-				0,																				// Object Placement
+				t,																				// Object Placement	
 				roomRep,																		// Representation
 				std::string("Spaaaace"),														// Long name
 				IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT,			// Composition Type	
@@ -604,14 +630,16 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			);
 #endif // USE_IFC4
 
+			//room->setObjectPlacement(relativeLoc);
+			
+			//cluster->getHelper(roomLoc)->getSourceFile()->addEntity(relativeLoc);
+			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			// TODO get relative placement
 
 
 			// TODO get storey
 
 
-
-			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			roomProducts.get()->push(room);
 			roomnum++;
 		}

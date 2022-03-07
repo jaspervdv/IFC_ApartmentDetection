@@ -35,8 +35,10 @@ class helper;
 
 // helper functions that can be utilised everywhere
 gp_Pnt rotatePointWorld(gp_Pnt p, double angle);
+BoostPoint3D rotatePointWorld(BoostPoint3D p, double angle);
 
 void printPoint(gp_Pnt p);
+void printPoint(BoostPoint3D p);
 
 void printFaces(TopoDS_Shape shape);
 

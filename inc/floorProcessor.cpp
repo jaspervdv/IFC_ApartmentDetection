@@ -572,6 +572,7 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 	}
 
 	building = *buildings.get()->begin();
+	IfcSchema::IfcObjectPlacement* buildingLoc = building->ObjectPlacement();
 
 	auto targetFile = data->getSourceFile();
 	IfcHierarchyHelper<IfcSchema> hierarchyHelper;
@@ -585,13 +586,7 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 		storey->setDescription("Automatically generated floor");
 
 		// placement
-		//IfcSchema::IfcCartesianPoint* anchor = new IfcSchema::IfcCartesianPoint({ 0.0, 0.0, floorStoreys[i] });
-		//IfcSchema::IfcDirection* dir = new IfcSchema::IfcDirection({ 0,1,0 });
-		//IfcSchema::IfcAxis2Placement3D placement(anchor, dir, dir);
-		//IfcSchema::IfcObjectPlacement* loc = new IfcSchema::IfcObjectPlacement(placement);
-
-		//storey->setObjectPlacement();
-
+		storey->setObjectPlacement(hierarchyHelper.addLocalPlacement(buildingLoc, 0, 0, floorStoreys[i]));
 		IfcSchema::IfcProduct::list::ptr parts(new IfcSchema::IfcProduct::list);
 
 		// make container object
@@ -658,6 +653,9 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 
 		gp_Trsf trsf;
 		if (product->hasObjectPlacement()) { kernel->convert_placement(product->ObjectPlacement(), trsf); }
+		else { 
+			
+		}
 		double height = -9999;
 
 		// floors are a special case due to them being placed based on their top elevation
@@ -769,7 +767,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 							if (faceHeight < lowHeight) { lowHeight = faceHeight; }
 						}
 						height = lowHeight;
-
+						std::cout << height << std::endl;
 						break;
 					}
 				}

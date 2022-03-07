@@ -65,6 +65,8 @@ public:
 
 	BoostPoint3D getCenterPoint() { return center_; }
 
+	BoostPoint3D getCenterPoint(double angle) { return rotatePointWorld(center_, -angle); }
+
 	// add product to the voxel
 	void addProduct(std::tuple<int, IfcSchema::IfcProduct*> product) { intersectingProducts.emplace_back(product); }
 
