@@ -767,7 +767,6 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 							if (faceHeight < lowHeight) { lowHeight = faceHeight; }
 						}
 						height = lowHeight;
-						std::cout << height << std::endl;
 						break;
 					}
 				}

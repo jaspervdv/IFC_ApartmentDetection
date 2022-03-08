@@ -38,7 +38,7 @@ std::vector<std::string> GetSources() {
 
 	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
-	"D:/Documents/Uni/Thesis/sources/Models/simple_models/box_60.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/box_60.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/simple_rooms.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/curtainWall_1.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/wall_curtain_1.ifc"
@@ -46,7 +46,7 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/rac_basic_sample_project.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_ARC_DigitalHub.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
@@ -100,7 +100,7 @@ bool yesNoQuestion() {
 
 int main(int argc, char** argv) {
 
-	auto startTime = std::chrono::high_resolution_clock::now();
+
 
 	// outputs errors related to the selected objects
 	if (false) { Logger::SetOutput(&std::cout, &std::cout); }
@@ -266,6 +266,7 @@ int main(int argc, char** argv) {
 	{
 		hCluster->getHelper(i)->indexGeo();
 	}
+	auto startTime = std::chrono::high_resolution_clock::now();
 
 	voxelfield* field = new voxelfield(hCluster);
 

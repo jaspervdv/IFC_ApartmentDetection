@@ -25,11 +25,9 @@ class voxel {
 private:
 	bool isIntersecting_ = false;
 	bool isInside = true;
-	std::vector<int> roomnums;
+	std::vector<int> roomnums_;
 	BoostPoint3D center_;
 	double size_;
-
-	std::vector<std::tuple<int, IfcSchema::IfcProduct*>> intersectingProducts;
 
 	// compute the signed volume
 	double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices);
@@ -52,23 +50,17 @@ public:
 	std::vector<std::vector<int>> getVoxelFaces();
 	std::vector<std::vector<int>> getVoxelEdges();
 
-	// returns the products that intersect with the voxel
-	std::vector<std::tuple<int, IfcSchema::IfcProduct*>> getProducts() { return intersectingProducts; }
-
-	void AddRoomNumber(int num) { roomnums.emplace_back(num); }
+	void addRoomNumber(int num) { roomnums_.emplace_back(num); }
 
 	void setOutside() { isInside = false; }
 
-	std::vector<int> getRoomNumbers() { return roomnums; }
+	std::vector<int> getRoomNumbers() { return roomnums_; }
 
 	bool getIsInside() { return isInside; }
 
 	BoostPoint3D getCenterPoint() { return center_; }
 
 	BoostPoint3D getCenterPoint(double angle) { return rotatePointWorld(center_, -angle); }
-
-	// add product to the voxel
-	void addProduct(std::tuple<int, IfcSchema::IfcProduct*> product) { intersectingProducts.emplace_back(product); }
 
 	// check the intersection of a triangluted product and a voxel
 	bool checkIntersecting(LookupValue lookup, const std::vector<gp_Pnt> voxelPoints, helper* h);
