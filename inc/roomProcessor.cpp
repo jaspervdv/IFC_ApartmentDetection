@@ -1,15 +1,19 @@
 #include "roomProcessor.h"
 
-void WriteToSTEP(TopoDS_Solid shape) {
+void WriteToSTEP(TopoDS_Solid shape, std::string addition) {
+	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/step" + addition + ".stp";
+	
 	STEPControl_Writer writer;
 
 	writer.Transfer(shape, STEPControl_ManifoldSolidBrep);
-	IFSelect_ReturnStatus stat = writer.Write("D:/Documents/Uni/Thesis/sources/Models/exports/step.stp");
+	IFSelect_ReturnStatus stat = writer.Write(path.c_str());
 
-	std::cout << "stat: " << stat << std::endl;
+	//std::cout << "stat: " << stat << std::endl;
 }
 
-void WriteToSTEP(TopoDS_Shape shape) {
+void WriteToSTEP(TopoDS_Shape shape, std::string addition) {
+	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/step" + addition + ".stp";
+	
 	STEPControl_Writer writer;
 
 	TopExp_Explorer expl;
@@ -17,9 +21,9 @@ void WriteToSTEP(TopoDS_Shape shape) {
 		writer.Transfer(expl.Current(), STEPControl_ManifoldSolidBrep);
 	}
 
-	IFSelect_ReturnStatus stat = writer.Write("D:/Documents/Uni/Thesis/sources/Models/exports/step.stp");
+	IFSelect_ReturnStatus stat = writer.Write(path.c_str());
 
-	std::cout << "stat: " << stat << std::endl;
+	//std::cout << "stat: " << stat << std::endl;
 }
 
 
@@ -434,7 +438,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
 				cluster->getHelper(j)->getIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
 
-				if (qResult.size() == 0) { continue; }
+				if (qResult.size() == 0) { 
+					continue; 
+				}
 
 				for (size_t k = 0; k < qResult.size(); k++)
 				{
@@ -443,22 +449,28 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				}
 			}
 
+			std::cout << aLSTools.Size() << std::endl;
+
 			aSplitter.SetArguments(aLSObjects);
 			aSplitter.SetTools(aLSTools);
 
 			aSplitter.SetRunParallel(Standard_True);
-			aSplitter.SetFuzzyValue(0.001);
+			aSplitter.SetFuzzyValue(0.0001);
 			aSplitter.SetNonDestructive(Standard_False);
 
 			aSplitter.Perform();
 
 			const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
 
+
 			// get roomshape
 			std::vector<TopoDS_Solid> solids;
 			for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) { solids.emplace_back(TopoDS::Solid(expl.Current())); }
 
-			if (solids.size() == 1) { continue; }
+			if (solids.size() == 1) {
+				//WriteToSTEP(aResult, std::to_string(i) + "_Failed");
+				continue; 
+			}
 
 			// get roomshape
 			int BiggestRoom = -1;
@@ -590,7 +602,18 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			UnitedScaledRoom.Move(relativeMovement);
 
 			IfcSchema::IfcProductRepresentation* roomRep = IfcGeom::serialise(STRINGIFY(IfcSchema), UnitedScaledRoom, false)->as<IfcSchema::IfcProductRepresentation>();
-			if (roomRep == 0) { std::cout << "wa" << std::endl; continue; }
+			if (roomRep == 0)
+			{
+				std::cout << "wa" << std::endl; 
+				//WriteToSTEP(aResult, std::to_string(i) + "_Failed");
+				continue;
+			}
+			else {
+				//WriteToSTEP(aResult, std::to_string(i));
+			}
+
+
+
 
 #ifdef USE_IFC4
 			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
