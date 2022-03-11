@@ -367,6 +367,11 @@ void helper::indexGeo()
 
 	// add doors to the rtree (for the appartment detection)
 	addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+
+	// =================================================================================================
+	// connictivity objects indexing
+	addObjectToCIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+	addObjectToCIndex<IfcSchema::IfcStair::list::ptr>(file_->instances_by_type<IfcSchema::IfcStair>());
 }
 
 bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduct* product)
@@ -436,6 +441,22 @@ void helper::addObjectToIndex(T object) {
 	}
 }
 
+template <typename T>
+void helper::addObjectToCIndex(T object) {
+	// add doors to the rtree (for the appartment detection)
+	for (auto it = object->begin(); it != object->end(); ++it) {
+		bg::model::box <BoostPoint3D> box = makeObjectBox(*it);
+		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
+			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
+			continue;
+		}
+		cIndex_.insert(std::make_pair(box, (int)cIndex_.size()));
+		std::vector<IfcSchema::IfcSpace*>* space = new std::vector<IfcSchema::IfcSpace*>;
+		auto lookup = std::make_tuple(*it, space);
+		connectivityLookup_.emplace_back(lookup);
+	}
+}
+
 
 IfcSchema::IfcOwnerHistory* helper::getHistory()
 {
@@ -502,12 +523,18 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 {
 	if (!product->hasRepresentation()) { return {}; }
 
+	BRep_Builder builder;
+	TopoDS_Compound comp;
+	builder.MakeCompound(comp);
+
 	auto representations = product->Representation()->Representations();
 
 	gp_Trsf trsf;
 	kernel_->convert_placement(product->ObjectPlacement(), trsf);
 
 	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
+
+
 		const IfcSchema::IfcRepresentation* representation = *et;
 
 		std::string geotype = representation->data().getArgument(2)->toString();
@@ -517,12 +544,16 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
 
 		// move to OpenCASCADE
-		TopoDS_Shape rShape = ob.at(0).Shape();
-		gp_Trsf placement = ob.at(0).Placement().Trsf();
-		rShape.Move(trsf * placement); // location in global space
-
-		return rShape;
+		for (size_t i = 0; i < ob.size(); i++)
+		{
+			TopoDS_Shape rShape = ob.at(i).Shape();
+			gp_Trsf placement = ob.at(i).Placement().Trsf();
+			rShape.Move(trsf * placement); // location in global space
+			
+			builder.Add(comp, rShape);
+		}
 	}
+	return comp;
 }
 
 void helper::whipeObject(IfcSchema::IfcProduct* product)

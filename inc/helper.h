@@ -26,6 +26,7 @@ namespace bgi = boost::geometry::index;
 typedef bg::model::point<double, 3, bg::cs::cartesian> BoostPoint3D;
 typedef std::pair<bg::model::box<BoostPoint3D>, int> Value;
 typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>> LookupValue;
+typedef std::tuple<IfcSchema::IfcProduct*, std::vector<IfcSchema::IfcSpace*>*> ConnectLookupValue;
 
 #ifndef HELPER_HELPER_H
 #define HELPER_HELPER_H
@@ -109,7 +110,9 @@ private:
 	IfcGeom::Kernel* kernel_;
 
 	bgi::rtree<Value, bgi::rstar<25>> index_; 
+	bgi::rtree<Value, bgi::rstar<25>> cIndex_;
 	std::vector<LookupValue> productLookup_;
+	std::vector<ConnectLookupValue> connectivityLookup_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
@@ -127,6 +130,9 @@ private:
 
 	template <typename T>
 	void addObjectToIndex(T object);
+
+	template <typename T>
+	void addObjectToCIndex(T object);
 
 public:
 	
@@ -190,7 +196,13 @@ public:
 
 	const bgi::rtree<Value, bgi::rstar<25>>* getIndexPointer() { return &index_; }
 
+	const bgi::rtree<Value, bgi::rstar<25>>* getConnectivityIndexPointer() { return &cIndex_; }
+
 	auto getLookup(int i) { return productLookup_[i]; }
+	
+	auto getCLookup(int i) { return connectivityLookup_[i]; }
+
+	auto getFullClookup() { return connectivityLookup_; }
 
 	std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges = false);
 

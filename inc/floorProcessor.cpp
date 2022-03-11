@@ -729,12 +729,12 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 			// The challenging way of getting the placement height
 			if (!hasBBox)
 			{
-
 				for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
 					const IfcSchema::IfcRepresentation* representation = *et;
 
-					std::string geotype = representation->data().getArgument(2)->toString();
 					if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
+
+					std::string geotype = representation->data().getArgument(2)->toString();
 
 					if (geotype == "'Brep'" ||
 						geotype == "'SweptSolid'" ||

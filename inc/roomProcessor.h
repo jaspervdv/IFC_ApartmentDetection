@@ -14,12 +14,14 @@
 #include <STEPControl_StepModelType.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepClass3d_SolidClassifier.hxx>
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
 
 #include <vector>
 #include <tuple>
+
 
 class voxel {
 private:
@@ -70,6 +72,7 @@ public:
 	bool getIsIntersecting() { return isIntersecting_; }
 };
 
+
 class voxelfield {
 
 private:
@@ -107,6 +110,10 @@ private:
 	// generates the faces of the voxel that are needed to create a rough room shape
 	std::vector<TopoDS_Face> getPartialFaces(std::vector<int> roomIndx, int voxelIndx);
 
+	TopoDS_Face getLowestFace(TopoDS_Shape shape);
+	gp_Pnt getLowestPoint(TopoDS_Shape shape);
+	gp_Pnt getHighestPoint(TopoDS_Shape shape);
+
 	// creates and adds a voxel object + checks with which products from the cluster it intersects
 	void addVoxel(int indx, helperCluster* cluster);
 
@@ -118,3 +125,38 @@ public:
 
 	void makeRooms(helperCluster* cluster);
 };
+
+/*
+class roomObject {
+private:
+	IfcSchema::IfcSpace* self_;
+	std::vector<IfcSchema::IfcProduct*> connections_;
+public:
+
+	roomObject(IfcSchema::IfcSpace* s) { self_ = s; }
+
+	void setSelf(IfcSchema::IfcSpace* s) { self_ = s; }
+	
+	const IfcSchema::IfcSpace* getSelf() { return self_; }
+
+	const std::vector<IfcSchema::IfcProduct*> getConnections() { return connections_; }
+
+	void addConnection(IfcSchema::IfcProduct* product) { connections_.emplace_back(product); }
+
+};
+
+
+class doorObject {
+private:
+	IfcSchema::IfcProduct* self_;
+	std::vector<IfcSchema::IfcSpace*> connections_;
+public:
+
+	void setSelf(IfcSchema::IfcDoor* s) { self_ = s; }
+
+	const IfcSchema::IfcProduct* getSelf() { return self_; }
+
+	const std::vector<IfcSchema::IfcSpace*> getConnections() { return connections_; }
+
+	void addConnection(IfcSchema::IfcSpace* product) { connections_.emplace_back(product); }
+};*/
