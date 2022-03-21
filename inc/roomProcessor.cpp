@@ -442,7 +442,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 	// test voxel for intersection and add voxel objects to the voxelfield
 	for (int i = 0; i < totalVoxels_; i++) { addVoxel(i, cluster); }
-
+	std::cout << "Room Growing" << std::endl;
 	// asign rooms
 	int roomnum = 0;
 	int temps = 0;
@@ -541,7 +541,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			TopExp_Explorer expl;
 
 			//TODO do intersection process
-			auto qBox = bg::model::box<BoostPoint3D>(Point3DOTB(p0), Point3DOTB(p4));
+			boost::geometry::model::box<BoostPoint3D> qBox = bg::model::box<BoostPoint3D>(Point3DOTB(p0), Point3DOTB(p4));
 
 			std::vector<Value> qResult;
 			qResult.clear();
@@ -584,8 +584,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
 
-			//WriteToSTEP(aResult, std::to_string(i));
-
 			// get roomshape
 			std::vector<TopoDS_Solid> solids;
 			for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) { solids.emplace_back(TopoDS::Solid(expl.Current())); }
@@ -620,7 +618,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				{
 					outSideIndx.emplace_back(j);
 				}
-
 			}
 			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
 			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
@@ -657,7 +654,8 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
 			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
 
-			if (solids.size() <= 1)
+			if (solids.size() < 1) { continue; }
+			else if (solids.size()  == 1)
 			{
 				BiggestRoom = 0;
 			}
@@ -681,15 +679,19 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					}
 				}
 			}
+			//std::cout << "in" << std::endl;
 
 			// Make a space object
+			//std::cout << "b: " << solids.size() << std::endl;
 			TopoDS_Shape UnitedScaledRoom = solids[BiggestRoom];
+			//std::cout << "out" << std::endl;
 			if (unitScale != 1)
 			{
 				gp_Trsf UnitScaler;
 				UnitScaler.SetScale({ 0.0, 0.0, 0.0 }, unitScale);
 				UnitedScaledRoom = BRepBuilderAPI_Transform(solids[BiggestRoom], UnitScaler).ModifiedShape(solids[BiggestRoom]);
 			}
+
 
 			// find correct storey
 			double lowX = 9999;
@@ -734,7 +736,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
 				IfcParse::IfcGlobalId(),														// GlobalId
 				0,																				// OwnerHistory
-				std::string("Room ") + std::to_string(roomnum),													// Name
+				std::string("Room ") + std::to_string(roomnum),									// Name
 				std::string(),																	// Description
 				boost::none,																	// Object type
 				t,																				// Object Placement	
@@ -761,89 +763,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 #endif // USE_IFC4
 			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			roomProducts.get()->push(room);
-
-			int doorCount = 0;
-			int stairCount = 0;
-
-			// find connectivity data
-			// Get lowest Face
-			TopoDS_Face roomfootprint = getLowestFace(unMovedUnitedScaledRoom);
-			TopoDS_Vertex lDoorP;
-
-			for (int j = 0; j < cSize; j++)
-			{
-				qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
-				cluster->getHelper(j)->getConnectivityIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
-
-				for (size_t k = 0; k < qResult.size(); k++)
-				{
-					ConnectLookupValue lookup = cluster->getHelper(j)->getCLookup(qResult[k].second);
-					TopoDS_Shape objectShape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup));
-
-					gp_Pnt groundObjectPoint = getLowestPoint(objectShape);
-
-					if (std::get<0>(lookup)->data().type()->name() == "IfcDoor")
-					{
-						for (expl.Init(roomfootprint, TopAbs_EDGE); expl.More(); expl.Next())
-						{
-							TopoDS_Edge edge = TopoDS::Edge(expl.Current());
-							TopExp_Explorer edgeExpl;
-							std::vector<gp_Pnt> edgePoints;
-							edgePoints.clear();
-
-							for (edgeExpl.Init(edge, TopAbs_VERTEX); edgeExpl.More(); edgeExpl.Next()) {
-								TopoDS_Vertex vertex = TopoDS::Vertex(edgeExpl.Current());
-								edgePoints.emplace_back(BRep_Tool::Pnt(vertex));
-							}
-
-							if (edgePoints.size() != 2) { std::cout << "error" << std::endl; }
-							double baseDistance = edgePoints[0].Distance(edgePoints[1]);
-							double triDistance = edgePoints[0].Distance(groundObjectPoint) + edgePoints[1].Distance(groundObjectPoint);
-
-							double buffer = 0.3;
-							if (abs(baseDistance - triDistance) <= buffer)
-							{
-								doorCount++;
-								std::get<1>(lookup)->emplace_back(room);
-								break;
-							}
-						}
-					}
-					else {
-						gp_Trsf stairOffset;
-						stairOffset.SetTranslation({ 0,0,0 }, { 0,0,0.5 });
-
-						gp_Pnt topObjectPoint = getHighestPoint(objectShape);
-
-						printPoint(groundObjectPoint.Transformed(stairOffset));
-						printPoint(topObjectPoint);
-
-						BRepClass3d_SolidClassifier insideChecker;
-						insideChecker.Load(unMovedUnitedScaledRoom);
-						insideChecker.Perform(groundObjectPoint.Transformed(stairOffset), 0.01);
-
-						if (!insideChecker.State())
-						{
-							std::get<1>(lookup)->emplace_back(room);
-							stairCount++;
-							continue;
-						}
-						insideChecker.Perform(topObjectPoint, 0.01);
-
-						if (!insideChecker.State())
-						{
-							std::get<1>(lookup)->emplace_back(room);
-							stairCount++;
-							continue;
-						}
-
-					}
-				}
-			}
-
-			room->setDescription("Roomnumber: " + std::to_string(roomnum) + ", with " + std::to_string(doorCount) + " unique doors and " + std::to_string(stairCount) + " unique stairs. Connected to: ");
-
-
+			updateConnections(unMovedUnitedScaledRoom, room, qBox, cluster);
 			roomnum++;
 		}
 	}
@@ -882,6 +802,91 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			}
 		}
 	}
+}
+
+void voxelfield::updateConnections(TopoDS_Shape room, IfcSchema::IfcSpace* ifcRoom, boost::geometry::model::box<BoostPoint3D> qBox, helperCluster* cluster)
+{
+	int cSize = cluster->getSize();
+
+	int doorCount = 0;
+	int stairCount = 0;
+
+	// find connectivity data
+	// Get lowest Face
+	TopoDS_Face roomfootprint = getLowestFace(room);
+	TopoDS_Vertex lDoorP;
+
+	std::vector<Value> qResult;
+	TopExp_Explorer expl;
+
+	for (int j = 0; j < cSize; j++)
+	{
+		qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
+		cluster->getHelper(j)->getConnectivityIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
+
+		for (size_t k = 0; k < qResult.size(); k++)
+		{
+			ConnectLookupValue lookup = cluster->getHelper(j)->getCLookup(qResult[k].second);
+			TopoDS_Shape objectShape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup));
+
+			gp_Pnt groundObjectPoint = getLowestPoint(objectShape);
+
+			if (std::get<0>(lookup)->data().type()->name() == "IfcDoor")
+			{
+				for (expl.Init(roomfootprint, TopAbs_EDGE); expl.More(); expl.Next())
+				{
+					TopoDS_Edge edge = TopoDS::Edge(expl.Current());
+					TopExp_Explorer edgeExpl;
+					std::vector<gp_Pnt> edgePoints;
+					edgePoints.clear();
+
+					for (edgeExpl.Init(edge, TopAbs_VERTEX); edgeExpl.More(); edgeExpl.Next()) {
+						TopoDS_Vertex vertex = TopoDS::Vertex(edgeExpl.Current());
+						edgePoints.emplace_back(BRep_Tool::Pnt(vertex));
+					}
+
+					if (edgePoints.size() != 2) { std::cout << "error" << std::endl; }
+					double baseDistance = edgePoints[0].Distance(edgePoints[1]);
+					double triDistance = edgePoints[0].Distance(groundObjectPoint) + edgePoints[1].Distance(groundObjectPoint);
+
+					double buffer = 0.3;
+					if (abs(baseDistance - triDistance) <= buffer)
+					{
+						doorCount++;
+						std::get<1>(lookup)->emplace_back(ifcRoom);
+						break;
+					}
+				}
+			}
+			else {
+				gp_Trsf stairOffset;
+				stairOffset.SetTranslation({ 0,0,0 }, { 0,0,0.5 });
+
+				gp_Pnt topObjectPoint = getHighestPoint(objectShape);
+
+				BRepClass3d_SolidClassifier insideChecker;
+				insideChecker.Load(room);
+				insideChecker.Perform(groundObjectPoint.Transformed(stairOffset), 0.01);
+
+				if (!insideChecker.State())
+				{
+					std::get<1>(lookup)->emplace_back(ifcRoom);
+					stairCount++;
+					continue;
+				}
+				insideChecker.Perform(topObjectPoint, 0.01);
+
+				if (!insideChecker.State())
+				{
+					std::get<1>(lookup)->emplace_back(ifcRoom);
+					stairCount++;
+					continue;
+				}
+
+			}
+		}
+	}
+	ifcRoom->setDescription("Has " + std::to_string(doorCount) + " unique doors and " + std::to_string(stairCount) + " unique stairs.Connected to : ");
 }
 	
 std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)
