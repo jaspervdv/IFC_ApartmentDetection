@@ -117,9 +117,10 @@ private:
 	// creates and adds a voxel object + checks with which products from the cluster it intersects
 	void addVoxel(int indx, helperCluster* cluster);
 
+	// correct the existing room objects
+	void correctRooms(helper* h);
 
-	void correctRooms(IfcSchema::IfcSpace::list::ptr rooms);
-
+	// updates the room data of every connectivity object
 	void updateConnections(TopoDS_Shape room, IfcSchema::IfcSpace* ifcRoom, boost::geometry::model::box<BoostPoint3D> qBox, helperCluster* cluster);
 
 	void outputFieldToFile();

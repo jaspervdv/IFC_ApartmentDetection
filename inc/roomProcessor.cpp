@@ -389,6 +389,93 @@ voxelfield::voxelfield(helperCluster* cluster)
 	}
 }
 
+void voxelfield::correctRooms(helper* h)
+{	
+	// get all rooms in a cluser
+	std::vector<roomLookupValue> roomValues = h->getFullRLookup();
+
+	// compute volume of every room
+	std::vector<double> roomVolume;
+	GProp_GProps gprop;
+
+	for (size_t i = 0; i < roomValues.size(); i++)
+	{
+		BRepGProp::VolumeProperties(std::get<1>(roomValues[i]), gprop);
+		roomVolume.emplace_back(gprop.Mass());
+	}
+
+	// check which room is complex
+	for (size_t i = 0; i < roomValues.size(); i++)
+	{
+		// create bounding box around roomshape
+		TopoDS_Shape roomShape = std::get<1>(roomValues[i]);
+		std::vector<gp_Pnt> cornerPoints;
+
+		gp_Pnt lll(9999, 9999, 9999);
+		gp_Pnt urr(-9999, -9999, -9999);
+
+		TopExp_Explorer expl;
+		for (expl.Init(roomShape, TopAbs_VERTEX); expl.More(); expl.Next())
+		{
+			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+			gp_Pnt p = BRep_Tool::Pnt(vertex);
+			cornerPoints.emplace_back(p);
+		}
+
+		for (size_t j = 0; j < cornerPoints.size(); j++)
+		{
+			auto currentCorner = cornerPoints[j];
+			if (urr.X() < currentCorner.X()) { urr.SetX(currentCorner.X()); }
+			if (urr.Y() < currentCorner.Y()) { urr.SetY(currentCorner.Y()); }
+			if (urr.Z() < currentCorner.Z()) { urr.SetZ(currentCorner.Z()); }
+			if (lll.X() > currentCorner.X()) { lll.SetX(currentCorner.X()); }
+			if (lll.Y() > currentCorner.Y()) { lll.SetY(currentCorner.Y()); }
+			if (lll.Z() > currentCorner.Z()) { lll.SetZ(currentCorner.Z()); }
+		}
+		// check if other rooms fall inside evaluating room
+		boost::geometry::model::box<BoostPoint3D> qBox = bg::model::box<BoostPoint3D>(Point3DOTB(lll), Point3DOTB(urr));
+
+		std::vector<Value> qResult;
+		qResult.clear();
+		h->getRoomIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
+
+		if (qResult.size() == 0) { continue; }
+
+		bool complex = false;
+
+		BRepClass3d_SolidClassifier insideChecker;
+		insideChecker.Load(roomShape);
+
+		for (size_t j = 0; j < qResult.size(); j++)
+		{
+			if (i == qResult[j].second) { continue;	} // ignore self
+
+			TopoDS_Shape matchingRoom = std::get<1>(roomValues[qResult[j].second]);
+			for (expl.Init(matchingRoom, TopAbs_VERTEX); expl.More(); expl.Next())
+			{
+				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+				gp_Pnt p = BRep_Tool::Pnt(vertex);				
+				insideChecker.Perform(p, 0.01);
+				if (!insideChecker.State() || insideChecker.IsOnAFace())
+				{
+					if (roomVolume[i] > roomVolume[qResult[j].second])
+					{
+						std::get<0>(roomValues[i])->setCompositionType(IfcSchema::IfcElementCompositionEnum::IfcElementComposition_COMPLEX);
+						complex = true;
+						break;
+					}
+				}
+			}
+			if (complex) { break; }
+		}
+		if (!complex)
+		{
+			std::get<0>(roomValues[i])->setCompositionType(IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT);
+		}
+
+	}
+}
+
 void voxelfield::makeRooms(helperCluster* cluster)
 {
 	int cSize = cluster->getSize();
@@ -421,6 +508,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 	for (size_t i = 0; i < cSize; i++)
 	{
+		correctRooms(cluster->getHelper(i));
 		IfcSchema::IfcSpace::list::ptr spaces = cluster->getHelper(i)->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>();
 		oldSpaces.emplace_back(spaces);
 	}
@@ -776,7 +864,10 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		for (IfcSchema::IfcSpace::list::it it = clusterSpaces->begin(); it != clusterSpaces->end(); ++it)
 		{
 			IfcSchema::IfcSpace* space = *it;
-			cluster->getHelper(i)->getSourceFile()->removeEntity(space);
+			if (space->CompositionType() == IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT)
+			{
+				cluster->getHelper(i)->getSourceFile()->removeEntity(space);
+			}
 		}
 	}
 	outputFieldToFile();

@@ -372,6 +372,10 @@ void helper::indexGeo()
 	// connictivity objects indexing
 	addObjectToCIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
 	addObjectToCIndex<IfcSchema::IfcStair::list::ptr>(file_->instances_by_type<IfcSchema::IfcStair>());
+
+	// =================================================================================================
+	// room objects indexing
+	addObjectToRIndex<IfcSchema::IfcSpace::list::ptr>(file_->instances_by_type<IfcSchema::IfcSpace>());
 }
 
 bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduct* product)
@@ -456,6 +460,23 @@ void helper::addObjectToCIndex(T object) {
 		connectivityLookup_.emplace_back(lookup);
 	}
 }
+
+template<typename T>
+void helper::addObjectToRIndex(T object){
+	// add doors to the rtree (for the appartment detection)
+	for (auto it = object->begin(); it != object->end(); ++it) {
+		bg::model::box <BoostPoint3D> box = makeObjectBox(*it);
+		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
+			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
+			continue;
+		}
+		rIndex_.insert(std::make_pair(box, (int)rIndex_.size()));
+		TopoDS_Shape spaceShape = getObjectShape(*it);
+		auto lookup = std::make_tuple(*it, spaceShape);
+		roomLookup_.emplace_back(lookup);
+	}
+}
+
 
 
 IfcSchema::IfcOwnerHistory* helper::getHistory()

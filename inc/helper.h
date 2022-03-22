@@ -1,4 +1,4 @@
-#define USE_IFC4
+//#define USE_IFC4
 
 #ifdef USE_IFC4
 #define IfcSchema Ifc4
@@ -27,6 +27,7 @@ typedef bg::model::point<double, 3, bg::cs::cartesian> BoostPoint3D;
 typedef std::pair<bg::model::box<BoostPoint3D>, int> Value;
 typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>> LookupValue;
 typedef std::tuple<IfcSchema::IfcProduct*, std::vector<IfcSchema::IfcSpace*>*> ConnectLookupValue;
+typedef std::tuple<IfcSchema::IfcSpace*, TopoDS_Shape> roomLookupValue;
 
 #ifndef HELPER_HELPER_H
 #define HELPER_HELPER_H
@@ -109,10 +110,13 @@ private:
 	IfcParse::IfcFile* file_;
 	IfcGeom::Kernel* kernel_;
 
-	bgi::rtree<Value, bgi::rstar<25>> index_; 
-	bgi::rtree<Value, bgi::rstar<25>> cIndex_;
+	static const int treeDepth = 25;
+	bgi::rtree<Value, bgi::rstar<treeDepth>> index_;
+	bgi::rtree<Value, bgi::rstar<treeDepth>> cIndex_;
+	bgi::rtree<Value, bgi::rstar<treeDepth>> rIndex_;
 	std::vector<LookupValue> productLookup_;
 	std::vector<ConnectLookupValue> connectivityLookup_;
+	std::vector<roomLookupValue> roomLookup_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
@@ -133,6 +137,9 @@ private:
 
 	template <typename T>
 	void addObjectToCIndex(T object);
+
+	template <typename T>
+	void addObjectToRIndex(T object);
 
 public:
 	
@@ -194,15 +201,21 @@ public:
 
 	double getRotation() { return originRot_; }
 
-	const bgi::rtree<Value, bgi::rstar<25>>* getIndexPointer() { return &index_; }
+	const bgi::rtree<Value, bgi::rstar<treeDepth>>* getIndexPointer() { return &index_; }
 
-	const bgi::rtree<Value, bgi::rstar<25>>* getConnectivityIndexPointer() { return &cIndex_; }
+	const bgi::rtree<Value, bgi::rstar<treeDepth>>* getConnectivityIndexPointer() { return &cIndex_; }
+
+	const bgi::rtree<Value, bgi::rstar<treeDepth>>* getRoomIndexPointer() { return &rIndex_; }
 
 	auto getLookup(int i) { return productLookup_[i]; }
 	
 	auto getCLookup(int i) { return connectivityLookup_[i]; }
 
+	auto getRLookup(int i) { return roomLookup_[i]; }
+
 	auto getFullClookup() { return connectivityLookup_; }
+
+	auto getFullRLookup() { return roomLookup_; }
 
 	std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges = false);
 
