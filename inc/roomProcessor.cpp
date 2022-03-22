@@ -460,13 +460,20 @@ void voxelfield::correctRooms(helper* h)
 				{
 					if (roomVolume[i] > roomVolume[qResult[j].second])
 					{
-						std::get<0>(roomValues[i])->setCompositionType(IfcSchema::IfcElementCompositionEnum::IfcElementComposition_COMPLEX);
 						complex = true;
-						break;
+						continue;
 					}
 				}
+				if (complex)
+				{
+					complex = false;
+					break;
+				}
 			}
-			if (complex) { break; }
+			if (complex) {
+				std::get<0>(roomValues[i])->setCompositionType(IfcSchema::IfcElementCompositionEnum::IfcElementComposition_COMPLEX);
+				break; 
+			}
 		}
 		if (!complex)
 		{
@@ -755,7 +762,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				// filter for volume 
 				double maxVolume = 0;
 
-
 				for (size_t j = 0; j < solids.size(); j++)
 				{
 					BRepGProp::VolumeProperties(solids[j], gprop);
@@ -841,7 +847,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				std::string("Space"),															// Name
 				std::string(std::to_string(roomnum)),											// Description
 				boost::none,																	// Object type
-				0,																				// Object Placement
+				t,																				// Object Placement
 				roomRep,																		// Representation
 				std::string("Spaaaace"),														// Long name
 				IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT,			// Composition Type	
