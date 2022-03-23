@@ -393,6 +393,101 @@ bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduc
 	return bg::model::box < BoostPoint3D >(boostlllpoint, boosturrpoint);
 }
 
+void helper::correctRooms() 
+{
+	// get all rooms in a cluser
+	std::vector<roomLookupValue> roomValues = getFullRLookup();
+
+	// compute volume of every room
+	std::vector<double> roomVolume;
+	GProp_GProps gprop;
+
+	for (size_t i = 0; i < roomValues.size(); i++)
+	{
+		BRepGProp::VolumeProperties(std::get<1>(roomValues[i]), gprop);
+		roomVolume.emplace_back(gprop.Mass());
+		roomCenterPoints_.emplace_back(gprop.CentreOfMass()); // TODO make functioing in con
+	}
+
+	// check which room is complex
+	for (size_t i = 0; i < roomValues.size(); i++)
+	{
+		// create bounding box around roomshape
+		TopoDS_Shape roomShape = std::get<1>(roomValues[i]);
+		std::vector<gp_Pnt> cornerPoints;
+
+		gp_Pnt lll(9999, 9999, 9999);
+		gp_Pnt urr(-9999, -9999, -9999);
+
+		TopExp_Explorer expl;
+		for (expl.Init(roomShape, TopAbs_VERTEX); expl.More(); expl.Next())
+		{
+			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+			gp_Pnt p = BRep_Tool::Pnt(vertex);
+			cornerPoints.emplace_back(p);
+		}
+
+		for (size_t j = 0; j < cornerPoints.size(); j++)
+		{
+			auto currentCorner = cornerPoints[j];
+			if (urr.X() < currentCorner.X()) { urr.SetX(currentCorner.X()); }
+			if (urr.Y() < currentCorner.Y()) { urr.SetY(currentCorner.Y()); }
+			if (urr.Z() < currentCorner.Z()) { urr.SetZ(currentCorner.Z()); }
+			if (lll.X() > currentCorner.X()) { lll.SetX(currentCorner.X()); }
+			if (lll.Y() > currentCorner.Y()) { lll.SetY(currentCorner.Y()); }
+			if (lll.Z() > currentCorner.Z()) { lll.SetZ(currentCorner.Z()); }
+		}
+		// check if other rooms fall inside evaluating room
+		boost::geometry::model::box<BoostPoint3D> qBox = bg::model::box<BoostPoint3D>(Point3DOTB(lll), Point3DOTB(urr));
+
+		std::vector<Value> qResult;
+		qResult.clear();
+		getRoomIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
+
+		if (qResult.size() == 0) { continue; }
+
+		bool complex = false;
+
+		BRepClass3d_SolidClassifier insideChecker;
+		insideChecker.Load(roomShape);
+
+		for (size_t j = 0; j < qResult.size(); j++)
+		{
+			if (i == qResult[j].second) { continue; } // ignore self
+
+			TopoDS_Shape matchingRoom = std::get<1>(roomValues[qResult[j].second]);
+			for (expl.Init(matchingRoom, TopAbs_VERTEX); expl.More(); expl.Next())
+			{
+				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+				gp_Pnt p = BRep_Tool::Pnt(vertex);
+				insideChecker.Perform(p, 0.01);
+				if (!insideChecker.State() || insideChecker.IsOnAFace())
+				{
+					if (roomVolume[i] > roomVolume[qResult[j].second])
+					{
+						complex = true;
+						continue;
+					}
+				}
+				if (complex)
+				{
+					complex = false;
+					break;
+				}
+			}
+			if (complex) {
+				std::get<0>(roomValues[i])->setCompositionType(IfcSchema::IfcElementCompositionEnum::IfcElementComposition_COMPLEX);
+				break;
+			}
+		}
+		if (!complex)
+		{
+			std::get<0>(roomValues[i])->setCompositionType(IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT);
+			gp_Pnt centerOfMass = gprop.CentreOfMass();
+		}
+	}
+}
+
 std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduct* product)
 {
 	std::vector<TopoDS_Face> faceList = getObjectFaces(product);
@@ -455,7 +550,7 @@ void helper::addObjectToCIndex(T object) {
 			continue;
 		}
 		cIndex_.insert(std::make_pair(box, (int)cIndex_.size()));
-		std::vector<IfcSchema::IfcSpace*>* space = new std::vector<IfcSchema::IfcSpace*>;
+		std::vector<roomObject*>* space = new std::vector<roomObject*>;
 		auto lookup = std::make_tuple(*it, space);
 		connectivityLookup_.emplace_back(lookup);
 	}

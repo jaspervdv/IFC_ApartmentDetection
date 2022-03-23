@@ -18,7 +18,15 @@
 #include <ifcgeom_schema_agnostic/kernel.h>
 #include <ifcgeom_schema_agnostic/Serialization.h>
 
+#include <GProp_GProps.hxx>
+#include <BRepGProp.hxx>
+#include <BRepClass3d_SolidClassifier.hxx>
+
 #include <memory>
+
+// Forward Decleration helper class
+class helper;
+struct roomObject;
 
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
@@ -26,14 +34,11 @@ namespace bgi = boost::geometry::index;
 typedef bg::model::point<double, 3, bg::cs::cartesian> BoostPoint3D;
 typedef std::pair<bg::model::box<BoostPoint3D>, int> Value;
 typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>> LookupValue;
-typedef std::tuple<IfcSchema::IfcProduct*, std::vector<IfcSchema::IfcSpace*>*> ConnectLookupValue;
+typedef std::tuple<IfcSchema::IfcProduct*, std::vector<roomObject*>*> ConnectLookupValue;
 typedef std::tuple<IfcSchema::IfcSpace*, TopoDS_Shape> roomLookupValue;
 
 #ifndef HELPER_HELPER_H
 #define HELPER_HELPER_H
-
-// Forward Decleration helper class
-class helper;
 
 // helper functions that can be utilised everywhere
 gp_Pnt rotatePointWorld(gp_Pnt p, double angle);
@@ -117,6 +122,7 @@ private:
 	std::vector<LookupValue> productLookup_;
 	std::vector<ConnectLookupValue> connectivityLookup_;
 	std::vector<roomLookupValue> roomLookup_;
+	std::vector<gp_Pnt> roomCenterPoints_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
@@ -161,6 +167,9 @@ public:
 
 	// makes a spatial index for the geometry
 	void indexGeo();
+
+	// corrects room classification
+	void correctRooms();
 
 	// returns a vector with length, area and volume multipliers
 	std::vector<double> getUnits() const { return { length_, area_, volume_ }; }
@@ -217,6 +226,8 @@ public:
 
 	auto getFullRLookup() { return roomLookup_; }
 
+	auto getRoomCenters() { return roomCenterPoints_; }
+
 	std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges = false);
 
 	std::vector<TopoDS_Face> getObjectFaces(const IfcSchema::IfcProduct* product);
@@ -245,6 +256,30 @@ public:
 	void setDepending(bool i) { isPartial = i; }
 
 	~helper() {};
+
+};
+
+class roomObject {
+private:
+	IfcSchema::IfcSpace* self_;
+	std::vector<roomObject*> connections_;
+	gp_Pnt point_;
+	int indexNum_;
+public:
+
+	roomObject(IfcSchema::IfcSpace* s, int i) { self_ = s; point_ = gp_Pnt(i, 0, 0); indexNum_ = i; }
+
+	void setSelf(IfcSchema::IfcSpace* s) { self_ = s; }
+
+	void setPoint(int i) { point_ = gp_Pnt(i, 0, 0); }
+
+	void setIndx(int i) { indexNum_ = i; }
+
+	IfcSchema::IfcSpace* getSelf() { return self_; }
+
+	const std::vector<roomObject*> getConnections() { return connections_; }
+
+	void addConnection(roomObject* product) { connections_.emplace_back(product); }
 
 };
 

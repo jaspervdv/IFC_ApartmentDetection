@@ -389,100 +389,6 @@ voxelfield::voxelfield(helperCluster* cluster)
 	}
 }
 
-void voxelfield::correctRooms(helper* h)
-{	
-	// get all rooms in a cluser
-	std::vector<roomLookupValue> roomValues = h->getFullRLookup();
-
-	// compute volume of every room
-	std::vector<double> roomVolume;
-	GProp_GProps gprop;
-
-	for (size_t i = 0; i < roomValues.size(); i++)
-	{
-		BRepGProp::VolumeProperties(std::get<1>(roomValues[i]), gprop);
-		roomVolume.emplace_back(gprop.Mass());
-	}
-
-	// check which room is complex
-	for (size_t i = 0; i < roomValues.size(); i++)
-	{
-		// create bounding box around roomshape
-		TopoDS_Shape roomShape = std::get<1>(roomValues[i]);
-		std::vector<gp_Pnt> cornerPoints;
-
-		gp_Pnt lll(9999, 9999, 9999);
-		gp_Pnt urr(-9999, -9999, -9999);
-
-		TopExp_Explorer expl;
-		for (expl.Init(roomShape, TopAbs_VERTEX); expl.More(); expl.Next())
-		{
-			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-			gp_Pnt p = BRep_Tool::Pnt(vertex);
-			cornerPoints.emplace_back(p);
-		}
-
-		for (size_t j = 0; j < cornerPoints.size(); j++)
-		{
-			auto currentCorner = cornerPoints[j];
-			if (urr.X() < currentCorner.X()) { urr.SetX(currentCorner.X()); }
-			if (urr.Y() < currentCorner.Y()) { urr.SetY(currentCorner.Y()); }
-			if (urr.Z() < currentCorner.Z()) { urr.SetZ(currentCorner.Z()); }
-			if (lll.X() > currentCorner.X()) { lll.SetX(currentCorner.X()); }
-			if (lll.Y() > currentCorner.Y()) { lll.SetY(currentCorner.Y()); }
-			if (lll.Z() > currentCorner.Z()) { lll.SetZ(currentCorner.Z()); }
-		}
-		// check if other rooms fall inside evaluating room
-		boost::geometry::model::box<BoostPoint3D> qBox = bg::model::box<BoostPoint3D>(Point3DOTB(lll), Point3DOTB(urr));
-
-		std::vector<Value> qResult;
-		qResult.clear();
-		h->getRoomIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
-
-		if (qResult.size() == 0) { continue; }
-
-		bool complex = false;
-
-		BRepClass3d_SolidClassifier insideChecker;
-		insideChecker.Load(roomShape);
-
-		for (size_t j = 0; j < qResult.size(); j++)
-		{
-			if (i == qResult[j].second) { continue;	} // ignore self
-
-			TopoDS_Shape matchingRoom = std::get<1>(roomValues[qResult[j].second]);
-			for (expl.Init(matchingRoom, TopAbs_VERTEX); expl.More(); expl.Next())
-			{
-				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-				gp_Pnt p = BRep_Tool::Pnt(vertex);				
-				insideChecker.Perform(p, 0.01);
-				if (!insideChecker.State() || insideChecker.IsOnAFace())
-				{
-					if (roomVolume[i] > roomVolume[qResult[j].second])
-					{
-						complex = true;
-						continue;
-					}
-				}
-				if (complex)
-				{
-					complex = false;
-					break;
-				}
-			}
-			if (complex) {
-				std::get<0>(roomValues[i])->setCompositionType(IfcSchema::IfcElementCompositionEnum::IfcElementComposition_COMPLEX);
-				break; 
-			}
-		}
-		if (!complex)
-		{
-			std::get<0>(roomValues[i])->setCompositionType(IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT);
-		}
-
-	}
-}
-
 void voxelfield::makeRooms(helperCluster* cluster)
 {
 	int cSize = cluster->getSize();
@@ -509,17 +415,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	GProp_GProps gprop;
 	IfcSchema::IfcProduct::list::ptr roomProducts(new IfcSchema::IfcProduct::list);
 
-	// get Room locations in memory
-	std::vector<IfcSchema::IfcSpace::list::ptr> oldSpaces;
-
-
-	for (size_t i = 0; i < cSize; i++)
-	{
-		correctRooms(cluster->getHelper(i));
-		IfcSchema::IfcSpace::list::ptr spaces = cluster->getHelper(i)->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>();
-		oldSpaces.emplace_back(spaces);
-	}
-
 	// pre make hierachy helper
 	IfcHierarchyHelper<IfcSchema> hierarchyHelper;
 
@@ -542,6 +437,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	int roomnum = 0;
 	int temps = 0;
 	std::cout << "room detection" << std::endl;
+
+	std::vector<roomObject*> roomObjects; // start graph data
+
 	for (int i = 0; i < totalVoxels_; i++)
 	{
 		if (Assignment_[i] == 0) // Find unassigned voxel
@@ -750,7 +648,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
 
 			if (solids.size() < 1) { continue; }
-			else if (solids.size()  == 1)
+			else if (solids.size() == 1)
 			{
 				BiggestRoom = 0;
 			}
@@ -826,16 +724,45 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				continue;
 			}
 
+			// find semantic data
+			std::vector < std::tuple<IfcSchema::IfcSpace*, gp_Pnt>> semanticDataList;
+			for (size_t j = 0; j < cSize; j++)
+			{
+				BRepClass3d_SolidClassifier insideChecker;
+				std::vector<gp_Pnt> centerPoints = cluster->getHelper(j)->getRoomCenters();
+				insideChecker.Load(unMovedUnitedScaledRoom);
+
+				for (size_t k = 0; k < centerPoints.size(); k++)
+				{
+					insideChecker.Perform(centerPoints[k], 0.01);
+
+					if (!insideChecker.State())
+					{
+						semanticDataList.emplace_back(std::make_tuple(std::get<0>(cluster->getHelper(j)->getRLookup(k)), centerPoints[k]));
+					}
+				}
+			}
+
+			// unload semantic data
+			IfcSchema::IfcSpace* matchingSpaceObject = std::get<0>(semanticDataList[0]);
+			std::string semanticName = "Automatic Space";
+			std::string semanticLongName = "Automatic Space: " + std::to_string(roomnum);
+			std::string semanticDescription = "";
+
+			if (matchingSpaceObject->hasName()) { semanticName = matchingSpaceObject->Name(); }
+			if (matchingSpaceObject->hasLongName()) { semanticLongName = matchingSpaceObject->LongName(); }
+			if (matchingSpaceObject->hasDescription()) { semanticDescription = matchingSpaceObject->Description(); }
+
 #ifdef USE_IFC4
 			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
 				IfcParse::IfcGlobalId(),														// GlobalId
 				0,																				// OwnerHistory
-				std::string("Room ") + std::to_string(roomnum),									// Name
-				std::string(),																	// Description
+				semanticName,																	// Name
+				semanticDescription,																// Description
 				boost::none,																	// Object type
 				t,																				// Object Placement	
 				roomRep,																		// Representation
-				std::string("Spaaaace"),														// Long name
+				semanticLongName,															// Long name
 				IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT,			// Composition Type	
 				boost::none,																	// Predefined Type
 				boost::none																		// Elevation with Flooring
@@ -857,51 +784,52 @@ void voxelfield::makeRooms(helperCluster* cluster)
 #endif // USE_IFC4
 			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			roomProducts.get()->push(room);
-			updateConnections(unMovedUnitedScaledRoom, room, qBox, cluster);
+
+			roomObject* rObject = new roomObject(room, roomObjects.size());
+
+			roomObjects.emplace_back(rObject);
+			updateConnections(unMovedUnitedScaledRoom, rObject, roomObjects, qBox, cluster);
 			roomnum++;
 		}
 	}
 
-	// delete all the original rooms in the file
-	for (size_t i = 0; i < oldSpaces.size(); i++)
+	// go through all old space objects and remove element space 
+	// TODO keep spaces not recreated?
+	for (size_t i = 0; i < cSize; i++)
 	{
-		auto clusterSpaces = oldSpaces[i];
-
-		for (IfcSchema::IfcSpace::list::it it = clusterSpaces->begin(); it != clusterSpaces->end(); ++it)
+		std::vector<roomLookupValue> roomValues = cluster->getHelper(i)->getFullRLookup();
+		for (size_t j = 0; j < roomValues.size(); j++)
 		{
-			IfcSchema::IfcSpace* space = *it;
+			IfcSchema::IfcSpace* space = std::get<0>(roomValues[j]);
 			if (space->CompositionType() == IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT)
 			{
 				cluster->getHelper(i)->getSourceFile()->removeEntity(space);
 			}
 		}
 	}
+
 	outputFieldToFile();
 	floorProcessor::sortObjects(cluster->getHelper(roomLoc), roomProducts);
 
-	// find connectivity
-	for (size_t i = 0; i < cSize; i++)
+	// apply connectivity data to the rooms
+	for (size_t i = 0; i < roomObjects.size(); i++)
 	{
-		auto pointers = cluster->getHelper(i)->getFullClookup();
+		roomObject* rObject = roomObjects[i];
+		auto connections = rObject->getConnections();
 
-		for (auto it = pointers.begin(); it != pointers.end(); ++it) {
-			auto pointer = *it;
-			auto connectedValue = std::get<1>(pointer)[0];
+		std::string description = "";
 
-			if (connectedValue.size() == 2)
-			{
-				std::cout << connectedValue[1]->Name() << std::endl;
-
-				connectedValue[0]->setDescription(
-					connectedValue[0]->Description() + connectedValue[1]->Name() + ",");
-				connectedValue[1]->setDescription(
-					connectedValue[1]->Description() + connectedValue[0]->Name() + ",");
-			}
+		for (size_t i = 0; i <connections.size(); i++)
+		{
+			description = description + connections[i]->getSelf()->Name() + ", ";
 		}
+
+		rObject->getSelf()->setDescription(rObject->getSelf()->Description() + description);
 	}
+
 }
 
-void voxelfield::updateConnections(TopoDS_Shape room, IfcSchema::IfcSpace* ifcRoom, boost::geometry::model::box<BoostPoint3D> qBox, helperCluster* cluster)
+void voxelfield::updateConnections(TopoDS_Shape room, roomObject* rObject, std::vector<roomObject*> rObjectList, boost::geometry::model::box<BoostPoint3D> qBox, helperCluster* cluster)
 {
 	int cSize = cluster->getSize();
 
@@ -950,7 +878,14 @@ void voxelfield::updateConnections(TopoDS_Shape room, IfcSchema::IfcSpace* ifcRo
 					if (abs(baseDistance - triDistance) <= buffer)
 					{
 						doorCount++;
-						std::get<1>(lookup)->emplace_back(ifcRoom);
+						std::get<1>(lookup)->emplace_back(rObject);
+
+						if (std::get<1>(lookup)->size() == 2)
+						{
+							std::get<1>(lookup)[0][0]->addConnection(std::get<1>(lookup)[0][1]);
+							std::get<1>(lookup)[0][1]->addConnection(std::get<1>(lookup)[0][0]);
+						}
+
 						break;
 					}
 				}
@@ -967,23 +902,33 @@ void voxelfield::updateConnections(TopoDS_Shape room, IfcSchema::IfcSpace* ifcRo
 
 				if (!insideChecker.State())
 				{
-					std::get<1>(lookup)->emplace_back(ifcRoom);
+					std::get<1>(lookup)->emplace_back(rObject);
 					stairCount++;
+					if (std::get<1>(lookup)->size() == 2)
+					{
+						std::get<1>(lookup)[0][0]->addConnection(std::get<1>(lookup)[0][1]);
+						std::get<1>(lookup)[0][1]->addConnection(std::get<1>(lookup)[0][0]);
+					}
 					continue;
 				}
 				insideChecker.Perform(topObjectPoint, 0.01);
 
 				if (!insideChecker.State())
 				{
-					std::get<1>(lookup)->emplace_back(ifcRoom);
+					std::get<1>(lookup)->emplace_back(rObject);
 					stairCount++;
+					if (std::get<1>(lookup)->size() == 2)
+					{
+						std::get<1>(lookup)[0][0]->addConnection(std::get<1>(lookup)[0][1]);
+						std::get<1>(lookup)[0][1]->addConnection(std::get<1>(lookup)[0][0]);
+					}
 					continue;
 				}
 
 			}
 		}
 	}
-	ifcRoom->setDescription("Has " + std::to_string(doorCount) + " unique doors and " + std::to_string(stairCount) + " unique stairs.Connected to : ");
+	 rObject->getSelf()->setDescription("Has " + std::to_string(doorCount) + " unique doors and " + std::to_string(stairCount) + " unique stairs. Connected to : ");
 }
 	
 std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)

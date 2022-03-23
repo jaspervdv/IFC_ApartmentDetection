@@ -1,9 +1,6 @@
 #include "helper.h"
 #include "floorProcessor.h"
 
-#include <GProp_GProps.hxx>
-#include <BRepGProp.hxx>
-
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
@@ -14,7 +11,6 @@
 #include <STEPControl_StepModelType.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
-#include <BRepClass3d_SolidClassifier.hxx>
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -117,11 +113,8 @@ private:
 	// creates and adds a voxel object + checks with which products from the cluster it intersects
 	void addVoxel(int indx, helperCluster* cluster);
 
-	// correct the existing room objects
-	void correctRooms(helper* h);
-
 	// updates the room data of every connectivity object
-	void updateConnections(TopoDS_Shape room, IfcSchema::IfcSpace* ifcRoom, boost::geometry::model::box<BoostPoint3D> qBox, helperCluster* cluster);
+	void updateConnections(TopoDS_Shape room, roomObject* rObject, std::vector<roomObject*> rObjectList, boost::geometry::model::box<BoostPoint3D> qBox, helperCluster* cluster);
 
 	void outputFieldToFile();
 
@@ -131,38 +124,3 @@ public:
 
 	void makeRooms(helperCluster* cluster);
 };
-
-/*
-class roomObject {
-private:
-	IfcSchema::IfcSpace* self_;
-	std::vector<IfcSchema::IfcProduct*> connections_;
-public:
-
-	roomObject(IfcSchema::IfcSpace* s) { self_ = s; }
-
-	void setSelf(IfcSchema::IfcSpace* s) { self_ = s; }
-	
-	const IfcSchema::IfcSpace* getSelf() { return self_; }
-
-	const std::vector<IfcSchema::IfcProduct*> getConnections() { return connections_; }
-
-	void addConnection(IfcSchema::IfcProduct* product) { connections_.emplace_back(product); }
-
-};
-
-
-class doorObject {
-private:
-	IfcSchema::IfcProduct* self_;
-	std::vector<IfcSchema::IfcSpace*> connections_;
-public:
-
-	void setSelf(IfcSchema::IfcDoor* s) { self_ = s; }
-
-	const IfcSchema::IfcProduct* getSelf() { return self_; }
-
-	const std::vector<IfcSchema::IfcSpace*> getConnections() { return connections_; }
-
-	void addConnection(IfcSchema::IfcSpace* product) { connections_.emplace_back(product); }
-};*/
