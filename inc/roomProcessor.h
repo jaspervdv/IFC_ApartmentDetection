@@ -83,7 +83,7 @@ private:
 	int totalVoxels_;
 
 	// x y z size of the voxel
-	double voxelSize_ = 1;
+	double voxelSize_ = 0.44;
 
 	double planeRotation_ = 0;
 

@@ -406,7 +406,8 @@ void helper::correctRooms()
 	{
 		BRepGProp::VolumeProperties(std::get<1>(roomValues[i]), gprop);
 		roomVolume.emplace_back(gprop.Mass());
-		roomCenterPoints_.emplace_back(gprop.CentreOfMass()); // TODO make functioing in con
+		roomCenterPoints_.emplace_back(gprop.CentreOfMass()); // TODO make functioing in convex
+
 	}
 
 	// check which room is complex

@@ -281,6 +281,10 @@ public:
 
 	void addConnection(roomObject* product) { connections_.emplace_back(product); }
 
+	gp_Pnt getPoint() { return point_; }
+
+	int getIdx() { return indexNum_; }
+
 };
 
 

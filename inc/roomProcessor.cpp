@@ -13,7 +13,6 @@ void WriteToSTEP(TopoDS_Solid shape, std::string addition) {
 
 void WriteToSTEP(TopoDS_Shape shape, std::string addition) {
 	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/step" + addition + ".stp";
-	
 	STEPControl_Writer writer;
 
 	TopExp_Explorer expl;
@@ -24,6 +23,42 @@ void WriteToSTEP(TopoDS_Shape shape, std::string addition) {
 	IFSelect_ReturnStatus stat = writer.Write(path.c_str());
 
 	//std::cout << "stat: " << stat << std::endl;
+}
+
+void WriteGraphToFile(std::vector<roomObject*> roomObjectList) {
+	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/graph.txt";
+	
+	std::ofstream storageFile;
+	storageFile.open(path);
+
+	storageFile << "_pointList_" << std::endl;
+	for (size_t i = 0; i < roomObjectList.size(); i++)
+	{
+		gp_Pnt p = roomObjectList[i]->getPoint();
+		storageFile << p.X() << ", " << p.X() << ", " << p.Z() << std::endl;
+	}
+	storageFile << "_name_" << std::endl;
+	for (size_t i = 0; i < roomObjectList.size(); i++)
+	{
+		if (roomObjectList[i]->getSelf()->hasLongName()) { storageFile << roomObjectList[i]->getSelf()->LongName() << std::endl; }
+		else { storageFile << roomObjectList[i]->getSelf()->Name() << std::endl; }
+
+	}
+
+
+	storageFile << "_connection_" << std::endl;
+	for (size_t i = 0; i < roomObjectList.size(); i++)
+	{
+		auto connections = roomObjectList[i]->getConnections();
+
+		for (size_t j = 0; j < connections.size(); j++)
+		{
+			storageFile << roomObjectList[i]->getIdx() << ", " << connections[j]->getIdx() << std::endl;
+		}
+	}
+
+
+
 }
 
 
@@ -461,10 +496,14 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			gp_Pnt lll(9999, 9999, 9999);
 			gp_Pnt urr(-9999, -9999, -9999);
 
+			gp_Pnt qlll(9999, 9999, 9999);
+			gp_Pnt qurr(-9999, -9999, -9999);
+
 			for (size_t j = 1; j < totalRoom.size(); j++)
 			{
 				voxel* currentBoxel = VoxelLookup_[totalRoom[j]];
 				std::vector<gp_Pnt> cornerPoints = currentBoxel->getCornerPoints(planeRotation_);
+				std::vector<gp_Pnt> cornerPointsRel = currentBoxel->getCornerPoints(0);
 				for (size_t k = 0; k < cornerPoints.size(); k++)
 				{
 					auto currentCorner = rotatePointWorld(cornerPoints[k], planeRotation_);
@@ -474,6 +513,14 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					if (lll.X() > currentCorner.X()) { lll.SetX(currentCorner.X()); }
 					if (lll.Y() > currentCorner.Y()) { lll.SetY(currentCorner.Y()); }
 					if (lll.Z() > currentCorner.Z()) { lll.SetZ(currentCorner.Z()); }
+
+					auto currentCornerRel = cornerPointsRel[k];
+					if (qurr.X() < currentCornerRel.X()) { qurr.SetX(currentCornerRel.X()); }
+					if (qurr.Y() < currentCornerRel.Y()) { qurr.SetY(currentCornerRel.Y()); }
+					if (qurr.Z() < currentCornerRel.Z()) { qurr.SetZ(currentCornerRel.Z()); }
+					if (qlll.X() > currentCornerRel.X()) { qlll.SetX(currentCornerRel.X()); }
+					if (qlll.Y() > currentCornerRel.Y()) { qlll.SetY(currentCornerRel.Y()); }
+					if (qlll.Z() > currentCornerRel.Z()) { qlll.SetZ(currentCornerRel.Z()); }
 				}
 			}
 
@@ -488,6 +535,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			gp_Pnt p7 = rotatePointWorld(gp_Pnt(urr.X(), lll.Y(), urr.Z()), -planeRotation_);
 
 			gp_Pnt pC = rotatePointWorld(gp_Pnt(lll.X() + (urr.X() - lll.X()) / 2, lll.Y() + (urr.Y() - lll.Y()) / 2, lll.Z() + (urr.Z() - lll.Z()) / 2), -planeRotation_);
+			gp_Pnt pCR = gp_Pnt(qlll.X() + (qurr.X() - qlll.X()) / 2, qlll.Y() + (qurr.Y() - qlll.Y()) / 2, qlll.Z() + (qurr.Z() - qlll.Z()) / 2);
 
 			TopoDS_Edge edge0 = BRepBuilderAPI_MakeEdge(p0, p1);
 			TopoDS_Edge edge1 = BRepBuilderAPI_MakeEdge(p1, p2);
@@ -519,22 +567,26 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			brepBuilder.Add(roughRoomShape, brepSewer.SewedShape());
 
 			gp_Trsf scaler;
-			scaler.SetScale(pC, 1.2);
+			scaler.SetScale(pC, 1.3);
+
+			// finalize rough room shape
 			TopoDS_Shape sizedRoomShape = BRepBuilderAPI_Transform(roughRoomShape, scaler).ModifiedShape(roughRoomShape);
 			p0.Transform(scaler);
 			p4.Transform(scaler);
 
-			// intersect roomshape with walls 
-			BOPAlgo_Splitter aSplitter;
+			// finalize qbox shape
+			scaler.SetScale(pCR, 1.1);
+			qlll.Transform(scaler);
+			qurr.Transform(scaler);
+			boost::geometry::model::box<BoostPoint3D> qBox = bg::model::box<BoostPoint3D>(Point3DOTB(qlll), Point3DOTB(qurr));
 
+			// intersect roomshape with objects 
+			BOPAlgo_Splitter aSplitter;
 			TopTools_ListOfShape aLSObjects;
 			aLSObjects.Append(sizedRoomShape);
 			TopTools_ListOfShape aLSTools;
 
 			TopExp_Explorer expl;
-
-			//TODO do intersection process
-			boost::geometry::model::box<BoostPoint3D> qBox = bg::model::box<BoostPoint3D>(Point3DOTB(p0), Point3DOTB(p4));
 
 			std::vector<Value> qResult;
 			qResult.clear();
@@ -565,10 +617,8 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			}
 
 			aLSTools.Reverse();
-
 			aSplitter.SetArguments(aLSObjects);
 			aSplitter.SetTools(aLSTools);
-
 			aSplitter.SetRunParallel(Standard_True);
 			//aSplitter.SetFuzzyValue(0.0001);
 			aSplitter.SetNonDestructive(Standard_True);
@@ -580,8 +630,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			// get roomshape
 			std::vector<TopoDS_Solid> solids;
 			for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) { solids.emplace_back(TopoDS::Solid(expl.Current())); }
-
-			if (solids.size() == 1) {
+			if (solids.size() <= 1) {
 				continue;
 			}
 
@@ -674,7 +723,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			//std::cout << "in" << std::endl;
 
 			// Make a space object
-			//std::cout << "b: " << solids.size() << std::endl;
 			TopoDS_Shape UnitedScaledRoom = solids[BiggestRoom];
 			//std::cout << "out" << std::endl;
 			if (unitScale != 1)
@@ -723,14 +771,12 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				std::cout << "wa" << std::endl;
 				continue;
 			}
-
 			// find semantic data
 			std::vector < std::tuple<IfcSchema::IfcSpace*, gp_Pnt>> semanticDataList;
 			for (size_t j = 0; j < cSize; j++)
 			{
 				BRepClass3d_SolidClassifier insideChecker;
 				std::vector<gp_Pnt> centerPoints = cluster->getHelper(j)->getRoomCenters();
-				insideChecker.Load(unMovedUnitedScaledRoom);
 
 				for (size_t k = 0; k < centerPoints.size(); k++)
 				{
@@ -741,17 +787,20 @@ void voxelfield::makeRooms(helperCluster* cluster)
 						semanticDataList.emplace_back(std::make_tuple(std::get<0>(cluster->getHelper(j)->getRLookup(k)), centerPoints[k]));
 					}
 				}
+				break;
 			}
-
 			// unload semantic data
-			IfcSchema::IfcSpace* matchingSpaceObject = std::get<0>(semanticDataList[0]);
 			std::string semanticName = "Automatic Space";
 			std::string semanticLongName = "Automatic Space: " + std::to_string(roomnum);
 			std::string semanticDescription = "";
 
-			if (matchingSpaceObject->hasName()) { semanticName = matchingSpaceObject->Name(); }
-			if (matchingSpaceObject->hasLongName()) { semanticLongName = matchingSpaceObject->LongName(); }
-			if (matchingSpaceObject->hasDescription()) { semanticDescription = matchingSpaceObject->Description(); }
+			if (semanticDataList.size() > 0)
+			{
+				IfcSchema::IfcSpace* matchingSpaceObject = std::get<0>(semanticDataList[0]);
+				if (matchingSpaceObject->hasName()) { semanticName = matchingSpaceObject->Name(); }
+				if (matchingSpaceObject->hasLongName()) { semanticLongName = matchingSpaceObject->LongName(); }
+				if (matchingSpaceObject->hasDescription()) { semanticDescription = matchingSpaceObject->Description(); }
+			}
 
 #ifdef USE_IFC4
 			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
@@ -782,6 +831,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				boost::none																		// Elevation with Flooring
 			);
 #endif // USE_IFC4
+
 			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			roomProducts.get()->push(room);
 
@@ -790,7 +840,10 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			roomObjects.emplace_back(rObject);
 			updateConnections(unMovedUnitedScaledRoom, rObject, roomObjects, qBox, cluster);
 			roomnum++;
+
+
 		}
+
 	}
 
 	// go through all old space objects and remove element space 
@@ -816,16 +869,12 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	{
 		roomObject* rObject = roomObjects[i];
 		auto connections = rObject->getConnections();
-
 		std::string description = "";
-
-		for (size_t i = 0; i <connections.size(); i++)
-		{
-			description = description + connections[i]->getSelf()->Name() + ", ";
-		}
-
+		for (size_t i = 0; i <connections.size(); i++) { description = description + connections[i]->getSelf()->Name() + ", "; }
 		rObject->getSelf()->setDescription(rObject->getSelf()->Description() + description);
 	}
+
+	WriteGraphToFile(roomObjects);
 
 }
 
