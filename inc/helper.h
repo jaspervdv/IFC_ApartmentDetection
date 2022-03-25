@@ -265,6 +265,7 @@ private:
 	std::vector<roomObject*> connections_;
 	gp_Pnt point_;
 	int indexNum_;
+	bool isInside_ = true;
 public:
 
 	roomObject(IfcSchema::IfcSpace* s, int i) { self_ = s; point_ = gp_Pnt(i, 0, 0); indexNum_ = i; }
@@ -275,6 +276,8 @@ public:
 
 	void setIndx(int i) { indexNum_ = i; }
 
+	void setIsOutSide() { isInside_ = false; }
+
 	IfcSchema::IfcSpace* getSelf() { return self_; }
 
 	const std::vector<roomObject*> getConnections() { return connections_; }
@@ -284,6 +287,8 @@ public:
 	gp_Pnt getPoint() { return point_; }
 
 	int getIdx() { return indexNum_; }
+
+	bool isInside() { return isInside_; }
 
 };
 

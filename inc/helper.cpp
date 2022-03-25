@@ -159,22 +159,24 @@ std::vector<gp_Pnt> helper::getAllPoints(IfcSchema::IfcProduct::list::ptr produc
 {
 	std::vector<gp_Pnt> pointList;
 
-	for (auto it = products->begin(); it != products->end(); ++it) {
 
+	for (auto it = products->begin(); it != products->end(); ++it) {
 		IfcSchema::IfcProduct* product = *it;
 
 		if (!product->hasRepresentation()) { continue; }
 		if (product->data().type()->name() == "IfcAnnotation") { continue; } // find points another way
-
 		if (product->data().type()->name() == "IfcSite") { continue; }
 
 		std::vector<gp_Pnt> temp = getObjectPoints(product);
+
 		if (temp.size() > 1);
 		{
-			for (size_t i = 0; i < temp.size(); i++) { pointList.emplace_back(temp[i]); 
+			for (size_t i = 0; i < temp.size(); i++) { 
+				pointList.emplace_back(temp[i]); 
 			}
 		}
 		temp.clear();
+
 	}
 
 	return pointList;
@@ -276,6 +278,7 @@ void helper::internalizeGeo()
 
 	// get products
 	IfcSchema::IfcProduct::list::ptr products = file_->instances_by_type<IfcSchema::IfcProduct>();
+
 	std::vector<gp_Pnt> pointList = getAllPoints(products);
 
 	// approximate smalles bbox
@@ -288,6 +291,7 @@ void helper::internalizeGeo()
 	gp_Pnt lllPoint = std::get<0>(base);
 	gp_Pnt urrPoint = std::get<1>(base);
 	double smallestDistance = std::get<2>(base);
+
 
 	for (size_t i = 0; i < maxIt; i++)
 	{
@@ -589,6 +593,8 @@ std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product
 {
 	std::vector<gp_Pnt> pointList;
 
+	//std::cout << product->data().toString() << std::endl;
+
 	if (!product->hasRepresentation()) { return { gp_Pnt(0.0, 0.0, 0.0) }; }
 
 	auto representations = product->Representation()->Representations();
@@ -640,6 +646,8 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 {
 	if (!product->hasRepresentation()) { return {}; }
 
+	//std::cout << product->data().toString() << std::endl;
+
 	BRep_Builder builder;
 	TopoDS_Compound comp;
 	builder.MakeCompound(comp);
@@ -648,17 +656,17 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 
 	gp_Trsf trsf;
 	kernel_->convert_placement(product->ObjectPlacement(), trsf);
-
 	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
-
-
 		const IfcSchema::IfcRepresentation* representation = *et;
 
 		std::string geotype = representation->data().getArgument(2)->toString();
+		
 		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
 
+		//std::cout << representation->data().toString() << std::endl;
+
 		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
+		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems)); //TODO error avoidance 
 
 		// move to OpenCASCADE
 		for (size_t i = 0; i < ob.size(); i++)
@@ -669,6 +677,7 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 			
 			builder.Add(comp, rShape);
 		}
+		break;
 	}
 	return comp;
 }
@@ -709,6 +718,7 @@ void helperCluster::internaliseData()
 		lllPoint_ = helperList[0]->getLllPoint();
 		urrPoint_ = helperList[0]->getUrrPoint();
 		originRot_ = helperList[0]->getRotation();
+
 
 		if (debug)
 		{

@@ -25,7 +25,37 @@ void WriteToSTEP(TopoDS_Shape shape, std::string addition) {
 	//std::cout << "stat: " << stat << std::endl;
 }
 
-void WriteGraphToFile(std::vector<roomObject*> roomObjectList) {
+void CreateGraph(std::vector<roomObject*> roomObjectList, helperCluster* cluster) {
+	// update data to outside 
+	int cSize = cluster->getSize();
+
+	// create outside object
+	roomObject* outsideObject = new roomObject(nullptr, roomObjectList.size());
+	outsideObject->setIsOutSide();
+
+	//roomObjectList.emplace_back(outsideObject);
+	roomObjectList.insert(roomObjectList.begin(), outsideObject);
+
+	std::cout << "T" << std::endl;
+
+	for (size_t i = 0; i < cSize; i++)
+	{
+		std::vector<ConnectLookupValue> lookup = cluster->getHelper(i)->getFullClookup();
+
+
+		for (size_t j = 0; j < lookup.size(); j++)
+		{
+			if (std::get<1>(lookup[j])->size() == 1)
+			{
+				std::get<1>(lookup[j])[0][0]->addConnection(outsideObject);
+			}
+			continue;
+		}
+
+	}
+
+	std::cout << "T2" << std::endl;
+
 	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/graph.txt";
 	
 	std::ofstream storageFile;
@@ -40,11 +70,18 @@ void WriteGraphToFile(std::vector<roomObject*> roomObjectList) {
 	storageFile << "_name_" << std::endl;
 	for (size_t i = 0; i < roomObjectList.size(); i++)
 	{
-		if (roomObjectList[i]->getSelf()->hasLongName()) { storageFile << roomObjectList[i]->getSelf()->LongName() << std::endl; }
-		else { storageFile << roomObjectList[i]->getSelf()->Name() << std::endl; }
-
+		if (roomObjectList[i]->isInside())
+		{
+			if (roomObjectList[i]->getSelf()->hasLongName()) { storageFile << roomObjectList[i]->getSelf()->LongName() << std::endl; }
+			else { storageFile << roomObjectList[i]->getSelf()->Name() << std::endl; }
+		}
+		else 
+		{
+			storageFile << "Outside" << std::endl;
+		}
 	}
 
+	std::cout << "T3" << std::endl;
 
 	storageFile << "_connection_" << std::endl;
 	for (size_t i = 0; i < roomObjectList.size(); i++)
@@ -53,7 +90,7 @@ void WriteGraphToFile(std::vector<roomObject*> roomObjectList) {
 
 		for (size_t j = 0; j < connections.size(); j++)
 		{
-			storageFile << roomObjectList[i]->getIdx() << ", " << connections[j]->getIdx() << std::endl;
+			storageFile << roomObjectList[i]->getIdx() + 1 << ", " << connections[j]->getIdx() + 1 << std::endl;
 		}
 	}
 
@@ -466,15 +503,28 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	}
 
 	// test voxel for intersection and add voxel objects to the voxelfield
-	for (int i = 0; i < totalVoxels_; i++) { addVoxel(i, cluster); }
-	std::cout << "Room Growing" << std::endl;
+	std::cout << "Populate Grid" << std::endl;
+	for (int i = 0; i < totalVoxels_; i++) { 
+
+		if (i%250 == 0)
+		{
+			std::cout.flush();
+			std::cout << i << " of " << totalVoxels_ << "\r";
+		}
+
+		addVoxel(i, cluster); 
+	}
+	std::cout << totalVoxels_ << " of " << totalVoxels_ << std::endl;
+	std::cout << std::endl;
+
+
 	// asign rooms
 	int roomnum = 0;
 	int temps = 0;
-	std::cout << "room detection" << std::endl;
 
 	std::vector<roomObject*> roomObjects; // start graph data
-
+	
+	std::cout << "Room Growing" << std::endl;
 	for (int i = 0; i < totalVoxels_; i++)
 	{
 		if (Assignment_[i] == 0) // Find unassigned voxel
@@ -482,7 +532,8 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			std::vector<int> totalRoom = growRoom(i, roomnum);
 			if (totalRoom.size() == 0) { continue; }
 
-			std::cout << "new room nr: " << roomnum + 1 << std::endl;
+			std::cout.flush();
+			std::cout << "Room nr: " << roomnum + 1 << "\r";
 
 			BRep_Builder brepBuilder;
 			BRepBuilderAPI_Sewing brepSewer;
@@ -777,6 +828,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			{
 				BRepClass3d_SolidClassifier insideChecker;
 				std::vector<gp_Pnt> centerPoints = cluster->getHelper(j)->getRoomCenters();
+				insideChecker.Load(unMovedUnitedScaledRoom);
 
 				for (size_t k = 0; k < centerPoints.size(); k++)
 				{
@@ -794,7 +846,14 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			std::string semanticLongName = "Automatic Space: " + std::to_string(roomnum);
 			std::string semanticDescription = "";
 
-			if (semanticDataList.size() > 0)
+			if (semanticDataList.size() == 1)
+			{
+				IfcSchema::IfcSpace* matchingSpaceObject = std::get<0>(semanticDataList[0]);
+				if (matchingSpaceObject->hasName()) { semanticName = matchingSpaceObject->Name(); }
+				if (matchingSpaceObject->hasLongName()) { semanticLongName = matchingSpaceObject->LongName(); }
+				if (matchingSpaceObject->hasDescription()) { semanticDescription = matchingSpaceObject->Description(); }
+			}
+			if (semanticDataList.size() > 1) // TODO find solution for when multiple semantic data is found
 			{
 				IfcSchema::IfcSpace* matchingSpaceObject = std::get<0>(semanticDataList[0]);
 				if (matchingSpaceObject->hasName()) { semanticName = matchingSpaceObject->Name(); }
@@ -840,11 +899,11 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			roomObjects.emplace_back(rObject);
 			updateConnections(unMovedUnitedScaledRoom, rObject, roomObjects, qBox, cluster);
 			roomnum++;
-
-
 		}
-
 	}
+	std::cout << std::endl;
+	std::cout << std::endl;
+
 
 	// go through all old space objects and remove element space 
 	// TODO keep spaces not recreated?
@@ -864,6 +923,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	outputFieldToFile();
 	floorProcessor::sortObjects(cluster->getHelper(roomLoc), roomProducts);
 
+
 	// apply connectivity data to the rooms
 	for (size_t i = 0; i < roomObjects.size(); i++)
 	{
@@ -874,7 +934,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		rObject->getSelf()->setDescription(rObject->getSelf()->Description() + description);
 	}
 
-	WriteGraphToFile(roomObjects);
+
+
+	CreateGraph(roomObjects, cluster);
 
 }
 
