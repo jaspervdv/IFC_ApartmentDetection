@@ -324,10 +324,6 @@ void helper::internalizeGeo()
 	urrPoint_ = urrPoint;
 	originRot_ = rotation;
 
-	std::cout << rotation << std::endl;
-	printPoint(lllPoint);
-	printPoint(urrPoint_);
-
 	hasGeo = true;
 }
 
@@ -709,7 +705,7 @@ void helper::writeToFile(std::string path)
 void helperCluster::internaliseData()
 {
 
-	bool debug = true;
+	bool debug = false;
 
 	if (!helperList[0]->getDepending())
 	{

@@ -25,7 +25,8 @@ private:
 	bool isInside = true;
 	std::vector<int> roomnums_;
 	BoostPoint3D center_;
-	double size_;
+	double sizeXY_;
+	double sizeZ_;
 
 	// compute the signed volume
 	double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices);
@@ -35,7 +36,7 @@ private:
 public:
 
 	// greates an axis aligned voxel
-	explicit voxel(BoostPoint3D center, double size);
+	explicit voxel(BoostPoint3D center, double sizeXY, double sizeZ);
 
 	// returns the lll and urr point of a voxel in axis aligned space
 	bg::model::box<BoostPoint3D> getVoxelGeo();
@@ -83,7 +84,10 @@ private:
 	int totalVoxels_;
 
 	// x y z size of the voxel
-	double voxelSize_ = 0.44;
+	double voxelSize_; // xy plane size
+	double voxelSizeZ_; // z plane size if flat roofed
+
+	bool isFlat_ = true;
 
 	double planeRotation_ = 0;
 
@@ -126,9 +130,10 @@ private:
 
 public:
 
-	explicit voxelfield(helperCluster* cluster);
+	explicit voxelfield(helperCluster* cluster, bool isFlat = true);
 
 	void makeRooms(helperCluster* cluster);
 
 	void writeGraph(std::string path);
+
 };

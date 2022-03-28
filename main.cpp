@@ -49,8 +49,8 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/rac_basic_sample_project.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_ARC_DigitalHub.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
@@ -233,62 +233,62 @@ int main(int argc, char** argv) {
 
 	std::cout << std::endl;
 
-	if (sourcePathArray.size() != 1)
+	std::cout << "Reconstruct room and apartment data? (Y/N): ";
+	if (yesNoQuestion())
 	{
-		while (true)
+		if (sourcePathArray.size() != 1)
 		{
-			bool validInput = true;
-			std::string stringNum = "";
-
-			std::cout << "Please enter number of the target model for the spaces/rooms" << std::endl;
-			for (size_t i = 0; i < fileNames.size(); i++) { std::cout << i + 1 << ": " << fileNames[i] << std::endl; }
-			std::cout << "Num: ";
-			std::cin >> stringNum;
-
-			for (size_t i = 0; i < stringNum.size(); i++)
+			while (true)
 			{
-				if (!std::isdigit(stringNum[i]))
+				bool validInput = true;
+				std::string stringNum = "";
+
+				std::cout << "Please enter number of the target model for the spaces/rooms" << std::endl;
+				for (size_t i = 0; i < fileNames.size(); i++) { std::cout << i + 1 << ": " << fileNames[i] << std::endl; }
+				std::cout << "Num: ";
+				std::cin >> stringNum;
+
+				for (size_t i = 0; i < stringNum.size(); i++)
 				{
-					validInput = false;
+					if (!std::isdigit(stringNum[i]))
+					{
+						validInput = false;
+					}
 				}
-			}
 
-			if (validInput)
-			{
-				int roomIndx = std::stoi(stringNum) - 1;
+				if (validInput)
+				{
+					int roomIndx = std::stoi(stringNum) - 1;
 
-				if (roomIndx >= 0) { 
-					hCluster->getHelper(roomIndx)->setHasRooms();
-					break;
+					if (roomIndx >= 0) {
+						hCluster->getHelper(roomIndx)->setHasRooms();
+						break;
+					}
 				}
+				std::cout << "\n [INFO] Please enter a valid number! \n" << std::endl;
 			}
-			std::cout << "\n [INFO] Please enter a valid number! \n" << std::endl;
 		}
+		else {
+			hCluster->getHelper(0)->setHasRooms();
+		}
+
+		for (int i = 0; i < hCluster->getSize(); i++)
+		{
+			hCluster->getHelper(i)->indexGeo();
+			hCluster->getHelper(i)->correctRooms();
+		}
+		auto startTime = std::chrono::high_resolution_clock::now();
+
+		voxelfield* field = new voxelfield(hCluster);
+
+		field->makeRooms(hCluster);
+
+		auto endTime = std::chrono::high_resolution_clock::now();
+		//std::cout << "computing time = " << std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count() << std::endl;
+
+		field->writeGraph(graphPath + "_graph.txt");
 	}
-	else {
-		hCluster->getHelper(0)->setHasRooms();
-	}
 
-	for (int i = 0; i < hCluster->getSize(); i++)
-	{
-		hCluster->getHelper(i)->indexGeo();
-		hCluster->getHelper(i)->correctRooms();
-	}
-	auto startTime = std::chrono::high_resolution_clock::now();
-
-	voxelfield* field = new voxelfield(hCluster);
-
-
-	field->makeRooms(hCluster);
-	field->writeGraph(graphPath + "_graph.txt");
-	std::cout << graphPath + "_graph.txt" << std::endl;
-
-
-
-	//TODO room detection and check
-	//TODO room creation
-	//TODO appartement detection
-	//TODO appartement creation
 
 	// write to file
 
@@ -297,12 +297,7 @@ int main(int argc, char** argv) {
 		hCluster->getHelper(i)->writeToFile(exportPathArray[i]);
 	}
 
-	std::cout << "last line executed" << std::endl;
+	std::cout << "[INFO] process has been succesfully executed" << std::endl;
 
-	auto endTime = std::chrono::high_resolution_clock::now();
-
-	std::cout << "computing time = " << std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count() << std::endl;
-	
 	return 0;
-
 }

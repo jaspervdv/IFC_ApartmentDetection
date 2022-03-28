@@ -201,7 +201,7 @@ BoostPoint3D voxelfield::relPointToWorld(BoostPoint3D p)
 {
 	double xCoord = anchor_.X() + (bg::get<0>(p) * voxelSize_);
 	double yCoord = anchor_.Y() + (bg::get<1>(p) * voxelSize_);
-	double zCoord = anchor_.Z() + (bg::get<2>(p) * voxelSize_);
+	double zCoord = anchor_.Z() + (bg::get<2>(p) * voxelSizeZ_);
 
 	return BoostPoint3D(xCoord, yCoord, zCoord);
 }
@@ -210,7 +210,7 @@ BoostPoint3D voxelfield::relPointToWorld(int px, int py, int pz)
 {
 	double xCoord = px * voxelSize_ + voxelSize_ / 2;
 	double yCoord = py * voxelSize_ + voxelSize_ / 2;
-	double zCoord = pz * voxelSize_ + voxelSize_ / 2;
+	double zCoord = pz * voxelSizeZ_ + voxelSizeZ_ / 2;
 
 	return BoostPoint3D(xCoord, yCoord, zCoord);
 }
@@ -371,7 +371,7 @@ void voxelfield::addVoxel(int indx, helperCluster* cluster)
 {
 	int cSize = cluster->getSize();
 	auto midPoint = relPointToWorld(linearToRelative<BoostPoint3D>(indx));
-	voxel* boxel = new voxel(midPoint, voxelSize_);
+	voxel* boxel = new voxel(midPoint, voxelSize_, voxelSizeZ_);
 
 	// make a pointlist 0 - 3 lower ring, 4 - 7 upper ring
 	auto boxelGeo = boxel->getVoxelGeo();
@@ -431,11 +431,50 @@ void voxelfield::outputFieldToFile()
 	storageFile.close();
 }
 
-voxelfield::voxelfield(helperCluster* cluster)
+voxelfield::voxelfield(helperCluster* cluster, bool isFlat)
 {
+	// ask user for desired voxel dimensions
+
+	std::string stringXYSize = "";
+	std::string stringZSize = "";
+
+	while (true)
+	{
+		std::cout << "Enter voxel XY dimenion (double):";
+		std::cin >> stringXYSize;
+
+		char* end = nullptr;
+		double val = strtod(stringXYSize.c_str(), &end);
+
+
+		if (end != stringXYSize.c_str() && *end == '\0' && val != HUGE_VAL)
+		{
+			voxelSize_ = val;
+			break;
+		}
+	}
+
+	while (true)
+	{
+		std::cout << "Enter voxel Z dimension (double):";
+		std::cin >> stringZSize;
+
+		char* end = nullptr;
+		double val = strtod(stringXYSize.c_str(), &end);
+
+
+		if (end != stringXYSize.c_str() && *end == '\0' && val != HUGE_VAL)
+		{
+			voxelSizeZ_ = val;
+			break;
+		}
+	}
+
+	std::cout << std::endl;
+
 	// compute generic voxelfield data
 	anchor_ = cluster->getLllPoint();
-	gp_Pnt urrPoints= cluster->getUrrPoint();
+	gp_Pnt urrPoints = cluster->getUrrPoint();
 
 	double xRange = urrPoints.X() - anchor_.X();
 	double yRange = urrPoints.Y() - anchor_.Y();
@@ -443,7 +482,7 @@ voxelfield::voxelfield(helperCluster* cluster)
 
 	xRelRange_ = (int) ceil(xRange / voxelSize_) + 1;
 	yRelRange_ = (int) ceil(yRange / voxelSize_) + 1;
-	zRelRange_ = (int) ceil(zRange / voxelSize_) + 1;
+	zRelRange_ = (int) ceil(zRange / voxelSizeZ_) + 1;
 
 	totalVoxels_ = xRelRange_ * yRelRange_ * zRelRange_;
 	Assignment_ = std::vector<int>(totalVoxels_, 0);
@@ -478,8 +517,6 @@ void voxelfield::writeGraph(std::string path)
 
 	std::ofstream storageFile;
 	storageFile.open(path);
-
-	std::cout << roomObjectList_.size() << std::endl;
 
 	storageFile << "_pointList_" << std::endl;
 	for (size_t i = 0; i < roomObjectList_.size(); i++)
@@ -581,7 +618,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	}
 
 	// test voxel for intersection and add voxel objects to the voxelfield
-	std::cout << "Populate Grid" << std::endl;
+	std::cout << "[INFO] Populate Grid" << std::endl;
 	for (int i = 0; i < totalVoxels_; i++) { 
 
 		if (i%250 == 0)
@@ -600,7 +637,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	int roomnum = 0;
 	int temps = 0;
 	
-	std::cout << "Room Growing" << std::endl;
+	std::cout << "[INFO ]Room Growing" << std::endl;
 	for (int i = 0; i < totalVoxels_; i++)
 	{
 		if (Assignment_[i] == 0) // Find unassigned voxel
@@ -1204,21 +1241,23 @@ std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)
 	return totalRoom;
 }
 
-voxel::voxel(BoostPoint3D center, double size)
+voxel::voxel(BoostPoint3D center, double sizeXY, double sizeZ)
 {
-	size_ = size;
+	sizeXY_ = sizeXY;
+	sizeZ_ = sizeZ;
 	center_ = center;
 
-	gp_Pnt minPoint(bg::get<0>(center) - 1 / 2 * size, bg::get<1>(center) - 1 / 2 * size, bg::get<2>(center) - 1 / 2 * size);
-	gp_Pnt maxPoint(bg::get<0>(center) + 1 / 2 * size, bg::get<1>(center) + 1 / 2 * size, bg::get<2>(center) + 1 / 2 * size);
+	gp_Pnt minPoint(bg::get<0>(center) - 1 / 2 * sizeXY, bg::get<1>(center) - 1 / 2 * sizeXY, bg::get<2>(center) - 1 / 2 * sizeZ);
+	gp_Pnt maxPoint(bg::get<0>(center) + 1 / 2 * sizeXY, bg::get<1>(center) + 1 / 2 * sizeXY, bg::get<2>(center) + 1 / 2 * sizeZ);
 }
 
 bg::model::box<BoostPoint3D> voxel::getVoxelGeo()
 {
-	double offset = size_ / 2;
+	double offsetXY = sizeXY_ / 2;
+	double offsetZ = sizeZ_ / 2;
 
-	BoostPoint3D lll (bg::get<0>(center_) - offset, bg::get<1>(center_) - offset, bg::get<2>(center_) - offset);
-	BoostPoint3D urr(bg::get<0>(center_) + offset, bg::get<1>(center_) + offset, bg::get<2>(center_) + offset);
+	BoostPoint3D lll (bg::get<0>(center_) - offsetXY, bg::get<1>(center_) - offsetXY, bg::get<2>(center_) - offsetZ);
+	BoostPoint3D urr(bg::get<0>(center_) + offsetXY, bg::get<1>(center_) + offsetXY, bg::get<2>(center_) + offsetZ);
 	
 	return bg::model::box<BoostPoint3D>(lll, urr);
 }
