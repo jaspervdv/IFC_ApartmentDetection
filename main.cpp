@@ -49,9 +49,9 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/rac_basic_sample_project.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_ARC_DigitalHub.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
@@ -112,6 +112,7 @@ int main(int argc, char** argv) {
 
 	// make export path
 	std::vector<std::string> exportPathArray;
+	std::string graphPath;
 	std::vector<std::string> fileNames;
 	for (size_t i = 0; i < sourcePathArray.size(); i++)
 	{
@@ -120,6 +121,9 @@ int main(int argc, char** argv) {
 		boost::split(segments, sourcePathArray[i], boost::is_any_of("/"));
 
 		for (size_t i = 0; i < segments.size()-1; i++) { exportPath += segments[i] + "/"; }
+
+		graphPath = exportPath + "exports/Exported_" + segments[segments.size() - 1];
+		graphPath.erase(graphPath.length() - 4);
 
 		fileNames.emplace_back(segments[segments.size() - 1]);
 		exportPath += "exports/Exported_" + segments[segments.size() - 1];
@@ -276,6 +280,8 @@ int main(int argc, char** argv) {
 
 
 	field->makeRooms(hCluster);
+	field->writeGraph(graphPath + "_graph.txt");
+	std::cout << graphPath + "_graph.txt" << std::endl;
 
 
 

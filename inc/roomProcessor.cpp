@@ -25,18 +25,16 @@ void WriteToSTEP(TopoDS_Shape shape, std::string addition) {
 	//std::cout << "stat: " << stat << std::endl;
 }
 
-void CreateGraph(std::vector<roomObject*> roomObjectList, helperCluster* cluster) {
+void voxelfield::createGraph(helperCluster* cluster) {
 	// update data to outside 
 	int cSize = cluster->getSize();
 
 	// create outside object
-	roomObject* outsideObject = new roomObject(nullptr, roomObjectList.size());
+	roomObject* outsideObject = new roomObject(nullptr, roomObjectList_.size());
 	outsideObject->setIsOutSide();
 
 	//roomObjectList.emplace_back(outsideObject);
-	roomObjectList.insert(roomObjectList.begin(), outsideObject);
-
-	std::cout << "T" << std::endl;
+	roomObjectList_.insert(roomObjectList_.begin(), outsideObject);
 
 	for (size_t i = 0; i < cSize; i++)
 	{
@@ -47,55 +45,67 @@ void CreateGraph(std::vector<roomObject*> roomObjectList, helperCluster* cluster
 		{
 			if (std::get<1>(lookup[j])->size() == 1)
 			{
-				std::get<1>(lookup[j])[0][0]->addConnection(outsideObject);
+				std::vector<gp_Pnt> doorPointList = cluster->getHelper(i)->getObjectPoints(std::get<0>(lookup[j]));
+				
+				double lowZ = 99999999999;
+				for (size_t k = 0; k < doorPointList.size(); k++)
+				{
+					double pZ = doorPointList[k].Z();
+					if (pZ < lowZ) { lowZ = pZ; }
+				}
+
+				if (lowZ < 2 && lowZ > - 0.5) //TODO door height needs to be smarter
+				{
+					std::get<1>(lookup[j])[0][0]->addConnection(outsideObject);
+				}
+
 			}
+		}
+	}
+
+	// Make sections
+	int counter = 0;
+
+	std::vector<roomObject*> bufferList;
+
+	for (size_t i = 0; i < roomObjectList_.size(); i++)
+	{
+
+		roomObject* currentRoom = roomObjectList_[i];
+
+		if (!currentRoom->isInside())
+		{
+			currentRoom->setSNum(-2);
 			continue;
-		}
+		} 
+		if (currentRoom->getConnections().size() != 1) { continue; } // always start isolated
+		if (currentRoom->getSNum() != -1) { continue; }
 
-	}
+		bufferList.emplace_back(currentRoom);
+		currentRoom->setSNum(counter);
 
-	std::cout << "T2" << std::endl;
-
-	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/graph.txt";
-	
-	std::ofstream storageFile;
-	storageFile.open(path);
-
-	storageFile << "_pointList_" << std::endl;
-	for (size_t i = 0; i < roomObjectList.size(); i++)
-	{
-		gp_Pnt p = roomObjectList[i]->getPoint();
-		storageFile << p.X() << ", " << p.X() << ", " << p.Z() << std::endl;
-	}
-	storageFile << "_name_" << std::endl;
-	for (size_t i = 0; i < roomObjectList.size(); i++)
-	{
-		if (roomObjectList[i]->isInside())
+		while (bufferList.size() > 0)
 		{
-			if (roomObjectList[i]->getSelf()->hasLongName()) { storageFile << roomObjectList[i]->getSelf()->LongName() << std::endl; }
-			else { storageFile << roomObjectList[i]->getSelf()->Name() << std::endl; }
+			std::vector<roomObject*> tempBufferList;
+			tempBufferList.clear();
+
+			for (size_t j = 0; j < bufferList.size(); j++)
+			{
+				std::vector<roomObject*> connections = bufferList[j]->getConnections();
+				for (size_t k = 0; k < connections.size(); k++)
+				{
+					if (connections[k]->getSNum() == - 1 && connections[k]->isInside())
+					{
+						connections[k]->setSNum(counter);
+						tempBufferList.emplace_back(connections[k]);
+					}
+				}
+			}
+			bufferList.clear();
+			bufferList = tempBufferList;
 		}
-		else 
-		{
-			storageFile << "Outside" << std::endl;
-		}
+		counter++;
 	}
-
-	std::cout << "T3" << std::endl;
-
-	storageFile << "_connection_" << std::endl;
-	for (size_t i = 0; i < roomObjectList.size(); i++)
-	{
-		auto connections = roomObjectList[i]->getConnections();
-
-		for (size_t j = 0; j < connections.size(); j++)
-		{
-			storageFile << roomObjectList[i]->getIdx() + 1 << ", " << connections[j]->getIdx() + 1 << std::endl;
-		}
-	}
-
-
-
 }
 
 
@@ -461,6 +471,74 @@ voxelfield::voxelfield(helperCluster* cluster)
 	}
 }
 
+void voxelfield::writeGraph(std::string path)
+{
+	// output the graph data
+	std::string p = path;
+
+	std::ofstream storageFile;
+	storageFile.open(path);
+
+	std::cout << roomObjectList_.size() << std::endl;
+
+	storageFile << "_pointList_" << std::endl;
+	for (size_t i = 0; i < roomObjectList_.size(); i++)
+	{
+		gp_Pnt p = roomObjectList_[i]->getPoint();
+		storageFile << p.X() << ", " << p.X() << ", " << p.Z() << std::endl;
+	}
+	storageFile << "_name_" << std::endl;
+	for (size_t i = 0; i < roomObjectList_.size(); i++)
+	{
+		if (roomObjectList_[i]->isInside())
+		{
+			if (roomObjectList_[i]->getSelf()->hasLongName()) { storageFile << roomObjectList_[i]->getSelf()->LongName() << std::endl; }
+			else { storageFile << roomObjectList_[i]->getSelf()->Name() << std::endl; }
+		}
+		else
+		{
+			storageFile << "Outside" << std::endl;
+		}
+	}
+
+	storageFile << "_area_" << std::endl;
+	storageFile << 100 << std::endl;
+	for (size_t i = 0; i < roomAreaList_.size(); i++)
+	{
+		storageFile << roomAreaList_[i] << std::endl;
+	}
+
+	storageFile << "_connection_" << std::endl;
+	for (size_t i = 0; i < roomObjectList_.size(); i++)
+	{
+		auto connections = roomObjectList_[i]->getConnections();
+
+		for (size_t j = 0; j < connections.size(); j++)
+		{
+			if (roomObjectList_[i]->getIdx() + 1 >= roomObjectList_.size())
+			{
+				storageFile << 0 << ", " << connections[j]->getIdx() + 1 << std::endl;
+			}
+			else if (connections[j]->getIdx() + 1 >= roomObjectList_.size())
+			{
+				storageFile << roomObjectList_[i]->getIdx() + 1 << ", " << 0 << std::endl;
+			}
+			else
+			{
+				storageFile << roomObjectList_[i]->getIdx() + 1 << ", " << connections[j]->getIdx() + 1 << std::endl;
+			}
+
+		}
+	}
+
+	storageFile << "_sections_" << std::endl;
+	for (size_t i = 0; i < roomObjectList_.size(); i++)
+	{
+		storageFile << roomObjectList_[i]->getSNum() << std::endl;
+	}
+
+}
+
 void voxelfield::makeRooms(helperCluster* cluster)
 {
 	int cSize = cluster->getSize();
@@ -521,8 +599,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	// asign rooms
 	int roomnum = 0;
 	int temps = 0;
-
-	std::vector<roomObject*> roomObjects; // start graph data
 	
 	std::cout << "Room Growing" << std::endl;
 	for (int i = 0; i < totalVoxels_; i++)
@@ -770,6 +846,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 						BiggestRoom = j;
 					}
 				}
+				roomAreaList_.emplace_back(maxVolume);
 			}
 			//std::cout << "in" << std::endl;
 
@@ -894,10 +971,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			roomProducts.get()->push(room);
 
-			roomObject* rObject = new roomObject(room, roomObjects.size());
-
-			roomObjects.emplace_back(rObject);
-			updateConnections(unMovedUnitedScaledRoom, rObject, roomObjects, qBox, cluster);
+			roomObject* rObject = new roomObject(room, roomObjectList_.size());
+			roomObjectList_.emplace_back(rObject);
+			updateConnections(unMovedUnitedScaledRoom, rObject, roomObjectList_, qBox, cluster);
 			roomnum++;
 		}
 	}
@@ -925,9 +1001,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 
 	// apply connectivity data to the rooms
-	for (size_t i = 0; i < roomObjects.size(); i++)
+	for (size_t i = 0; i < roomObjectList_.size(); i++)
 	{
-		roomObject* rObject = roomObjects[i];
+		roomObject* rObject = roomObjectList_[i];
 		auto connections = rObject->getConnections();
 		std::string description = "";
 		for (size_t i = 0; i <connections.size(); i++) { description = description + connections[i]->getSelf()->Name() + ", "; }
@@ -936,7 +1012,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 
 
-	CreateGraph(roomObjects, cluster);
+	createGraph(cluster);
 
 }
 

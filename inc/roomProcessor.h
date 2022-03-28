@@ -90,6 +90,10 @@ private:
 	// -1 is intersected 0 is not assigned 1..n is room assignement;
 	std::vector<int> Assignment_;
 	std::map<int, voxel*> VoxelLookup_;
+
+	std::vector<roomObject*> roomObjectList_;
+	std::vector<double> roomAreaList_;
+	bool hasGraphData_;
 	
 	std::vector<int> getNeighbours(int voxelIndx);
 
@@ -118,9 +122,13 @@ private:
 
 	void outputFieldToFile();
 
+	void createGraph(helperCluster* cluster);
+
 public:
 
 	explicit voxelfield(helperCluster* cluster);
 
 	void makeRooms(helperCluster* cluster);
+
+	void writeGraph(std::string path);
 };
