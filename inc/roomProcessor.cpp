@@ -645,7 +645,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			std::vector<int> totalRoom = growRoom(i, roomnum);
 			if (totalRoom.size() == 0) { continue; }
 
-			std::cout.flush();
+			//std::cout.flush();
 			std::cout << "Room nr: " << roomnum + 1 << "\r";
 
 			BRep_Builder brepBuilder;
@@ -860,6 +860,32 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
 			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
 
+			// eliminate outside shape by contact to the original bbox
+			outSideIndx.clear();
+
+			BRepClass3d_SolidClassifier insideChecker;
+			insideChecker.Load(sizedRoomShape);
+
+			for (size_t j = 0; j < solids.size(); j++)
+			{
+				for (expl.Init(solids[j], TopAbs_FACE); expl.More(); expl.Next()) {
+					TopoDS_Face currentFace = TopoDS::Face(expl.Current());
+
+					BRepGProp::VolumeProperties(currentFace, gprop);
+					insideChecker.Perform(gprop.CentreOfMass(), 0.01);
+
+					if (insideChecker.IsOnAFace()) {
+						outSideIndx.emplace_back(j);
+						break;
+					}
+				}
+			}
+
+			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
+			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
+
+
+			// select shape based on volume
 			if (solids.size() < 1) { continue; }
 			else if (solids.size() == 1)
 			{
@@ -885,18 +911,15 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				}
 				roomAreaList_.emplace_back(maxVolume);
 			}
-			//std::cout << "in" << std::endl;
 
 			// Make a space object
 			TopoDS_Shape UnitedScaledRoom = solids[BiggestRoom];
-			//std::cout << "out" << std::endl;
 			if (unitScale != 1)
 			{
 				gp_Trsf UnitScaler;
 				UnitScaler.SetScale({ 0.0, 0.0, 0.0 }, unitScale);
 				UnitedScaledRoom = BRepBuilderAPI_Transform(solids[BiggestRoom], UnitScaler).ModifiedShape(solids[BiggestRoom]);
 			}
-
 
 			// find correct storey
 			double lowX = 9999;
@@ -955,6 +978,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				}
 				break;
 			}
+
 			// unload semantic data
 			std::string semanticName = "Automatic Space";
 			std::string semanticLongName = "Automatic Space: " + std::to_string(roomnum);
@@ -1017,7 +1041,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	std::cout << std::endl;
 	std::cout << std::endl;
 
-
 	// go through all old space objects and remove element space 
 	// TODO keep spaces not recreated?
 	for (size_t i = 0; i < cSize; i++)
@@ -1033,9 +1056,10 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		}
 	}
 
-	outputFieldToFile();
-	floorProcessor::sortObjects(cluster->getHelper(roomLoc), roomProducts);
+	if (roomObjectList_.size() == 0) { return;}
 
+	//outputFieldToFile();
+	floorProcessor::sortObjects(cluster->getHelper(roomLoc), roomProducts);
 
 	// apply connectivity data to the rooms
 	for (size_t i = 0; i < roomObjectList_.size(); i++)
@@ -1046,8 +1070,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		for (size_t i = 0; i <connections.size(); i++) { description = description + connections[i]->getSelf()->Name() + ", "; }
 		rObject->getSelf()->setDescription(rObject->getSelf()->Description() + description);
 	}
-
-
 
 	createGraph(cluster);
 

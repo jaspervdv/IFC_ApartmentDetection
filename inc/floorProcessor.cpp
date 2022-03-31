@@ -629,6 +629,12 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 	for (auto it = containers->begin(); it != containers->end(); ++it)
 	{
 		IfcSchema::IfcRelContainedInSpatialStructure* structure = *it;
+
+		if (structure->data().getArgument(5)->toString().size() < 2)
+		{
+			continue;
+		}
+
 		double height = std::stod(structure->RelatingStructure()->data().getArgument(9)->toString()) * lengthMulti;
 
 		pairedContainers.emplace_back(
