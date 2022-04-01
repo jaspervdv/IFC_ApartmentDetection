@@ -67,6 +67,8 @@ public:
 	bool linearEqIntersection(std::vector<gp_Pnt> productPoints, std::vector<gp_Pnt> voxelPoints);
 
 	bool getIsIntersecting() { return isIntersecting_; }
+
+	double getZ() { return sizeZ_; }
 };
 
 

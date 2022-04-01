@@ -701,6 +701,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			TopoDS_Solid roughRoomShape;
 			brepBuilder.MakeSolid(roughRoomShape);
 
+			gp_Pnt inRoomPoint(99999, 99999, 99999);
+			bool hasInsidePoint = false;
+
 			// create bbox around rough room shape
 			gp_Pnt lll(9999, 9999, 9999);
 			gp_Pnt urr(-9999, -9999, -9999);
@@ -730,6 +733,14 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					if (qlll.X() > currentCornerRel.X()) { qlll.SetX(currentCornerRel.X()); }
 					if (qlll.Y() > currentCornerRel.Y()) { qlll.SetY(currentCornerRel.Y()); }
 					if (qlll.Z() > currentCornerRel.Z()) { qlll.SetZ(currentCornerRel.Z()); }
+				}
+
+				// search for inside point
+				if (!currentBoxel->getIsIntersecting() && !hasInsidePoint)
+				{
+					inRoomPoint = rotatePointWorld(cornerPoints[5], planeRotation_);
+					inRoomPoint.SetZ(inRoomPoint.Z() - currentBoxel->getZ() / 2);
+					hasInsidePoint = true;
 				}
 			}
 
@@ -904,60 +915,85 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
 			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
-
-			// eliminate outside shape by contact to the original bbox
+			if (solids.size() == 0) { continue; }
 			outSideIndx.clear();
 
-			BRepClass3d_SolidClassifier insideChecker;
-			insideChecker.Load(sizedRoomShape);
-
-			for (size_t j = 0; j < solids.size(); j++)
+			if (!hasInsidePoint)
 			{
-				for (expl.Init(solids[j], TopAbs_FACE); expl.More(); expl.Next()) {
-					TopoDS_Face currentFace = TopoDS::Face(expl.Current());
-
-					BRepGProp::VolumeProperties(currentFace, gprop);
-					insideChecker.Perform(gprop.CentreOfMass(), 0.01);
-
-					if (insideChecker.IsOnAFace()) {
-						outSideIndx.emplace_back(j);
-						break;
-					}
-				}
-			}
-
-			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
-			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
-
-
-			// select shape based on volume
-			if (solids.size() < 1) { continue; }
-			else if (solids.size() == 1)
-			{
-				BiggestRoom = 0;
-				BRepGProp::VolumeProperties(solids[BiggestRoom], gprop);
-				double volume = gprop.Mass();
-				roomAreaList_.emplace_back(volume);
-			}
-			else {
-
-				std::vector<gp_Pnt> roomShapePoints;
-				roomShapePoints.clear();
-
-				// filter for volume 
-				double maxVolume = 0;
+				// eliminate outside shape by contact to the original bbox
+				BRepClass3d_SolidClassifier insideChecker;
+				insideChecker.Load(sizedRoomShape);
 
 				for (size_t j = 0; j < solids.size(); j++)
 				{
-					BRepGProp::VolumeProperties(solids[j], gprop);
-					double volume = gprop.Mass();
-					if (maxVolume < volume)
-					{
-						maxVolume = volume;
-						BiggestRoom = j;
+					for (expl.Init(solids[j], TopAbs_FACE); expl.More(); expl.Next()) {
+						TopoDS_Face currentFace = TopoDS::Face(expl.Current());
+
+						BRepGProp::VolumeProperties(currentFace, gprop);
+						insideChecker.Perform(gprop.CentreOfMass(), 0.01);
+
+						if (insideChecker.IsOnAFace()) {
+							outSideIndx.emplace_back(j);
+							break;
+						}
 					}
 				}
-				roomAreaList_.emplace_back(maxVolume);
+
+				std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
+				for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
+
+				// select shape based on volume
+				if (solids.size() < 1) { continue; }
+				else if (solids.size() == 1)
+				{
+					BiggestRoom = 0;
+					BRepGProp::VolumeProperties(solids[BiggestRoom], gprop);
+					double volume = gprop.Mass();
+					roomAreaList_.emplace_back(volume);
+				}
+				else {
+
+					std::vector<gp_Pnt> roomShapePoints;
+					roomShapePoints.clear();
+
+					// filter for volume 
+					double maxVolume = 0;
+
+					for (size_t j = 0; j < solids.size(); j++)
+					{
+						BRepGProp::VolumeProperties(solids[j], gprop);
+						double volume = gprop.Mass();
+						if (maxVolume < volume)
+						{
+							maxVolume = volume;
+							BiggestRoom = j;
+						}
+					}
+					roomAreaList_.emplace_back(maxVolume);
+				}
+			}
+			else 
+			{
+				for (size_t j = 0; j < solids.size(); j++)
+				{
+					BRepClass3d_SolidClassifier insideChecker;
+					insideChecker.Load(solids[j]);
+					insideChecker.Perform(inRoomPoint, 0.001);
+
+					if (!insideChecker.State())
+					{
+						BiggestRoom = j;
+						BRepGProp::VolumeProperties(solids[BiggestRoom], gprop);
+						double volume = gprop.Mass();
+						roomAreaList_.emplace_back(volume);
+					}
+
+				}
+			}
+
+			if (BiggestRoom == -1)
+			{
+				continue;
 			}
 
 			// Make a space object
