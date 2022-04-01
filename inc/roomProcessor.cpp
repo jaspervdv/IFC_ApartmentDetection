@@ -576,6 +576,51 @@ void voxelfield::writeGraph(std::string path)
 
 }
 
+std::vector<std::string> voxelfield::getSemanticMatch(std::vector<IfcSchema::IfcSpace*> semanticSources, double roomNum)
+{
+	// unload semantic data
+	double semanticListLenght = semanticSources.size();
+
+	std::string semanticName = "Automatic Space";
+	std::string semanticLongName = "Automatic Space: " + std::to_string(roomNum);
+	std::string semanticDescription = "";
+
+	if (semanticListLenght > 0)
+	{
+		IfcSchema::IfcSpace* matchingSpaceObject = semanticSources[0];
+		if (matchingSpaceObject->hasName()) { semanticName = matchingSpaceObject->Name(); }
+		if (matchingSpaceObject->hasLongName()) { semanticLongName = matchingSpaceObject->LongName(); }
+		if (matchingSpaceObject->hasDescription()) { semanticDescription = matchingSpaceObject->Description(); }
+
+		if (semanticListLenght > 1) // find solution for when multiple semantic data is found
+		{
+			IfcSchema::IfcSpace* matchingSpaceObject = semanticSources[1];
+			if (matchingSpaceObject->hasName()) { semanticName = semanticName + " (" + matchingSpaceObject->Name(); }
+			if (matchingSpaceObject->hasLongName()) { semanticLongName = semanticLongName + " (" + matchingSpaceObject->LongName(); }
+			if (matchingSpaceObject->hasDescription()) { semanticDescription = semanticDescription + " (" + matchingSpaceObject->Description(); }
+
+			for (size_t j = 2; j < semanticListLenght; j++)
+			{
+				IfcSchema::IfcSpace* matchingSpaceObject = semanticSources[j];
+				if (j == semanticListLenght - 1)
+				{
+					if (matchingSpaceObject->hasName()) { semanticName = semanticName + " & " + matchingSpaceObject->Name() + ")"; }
+					if (matchingSpaceObject->hasLongName()) { semanticLongName = semanticLongName + " & " + matchingSpaceObject->LongName() + ")"; }
+					if (matchingSpaceObject->hasDescription()) { semanticDescription = semanticDescription + " & " + matchingSpaceObject->Description() + ")"; }
+				}
+				else {
+					if (matchingSpaceObject->hasName()) { semanticName = semanticName + ", " + matchingSpaceObject->Name(); }
+					if (matchingSpaceObject->hasLongName()) { semanticLongName = semanticLongName + ", " + matchingSpaceObject->LongName(); }
+					if (matchingSpaceObject->hasDescription()) { semanticDescription = semanticDescription + ", " + matchingSpaceObject->Description(); }
+				}
+			}
+		}
+	}
+
+	return { semanticName, semanticLongName, semanticDescription } ;
+
+}
+
 void voxelfield::makeRooms(helperCluster* cluster)
 {
 	int cSize = cluster->getSize();
@@ -890,6 +935,9 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			else if (solids.size() == 1)
 			{
 				BiggestRoom = 0;
+				BRepGProp::VolumeProperties(solids[BiggestRoom], gprop);
+				double volume = gprop.Mass();
+				roomAreaList_.emplace_back(volume);
 			}
 			else {
 
@@ -960,7 +1008,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 				continue;
 			}
 			// find semantic data
-			std::vector < std::tuple<IfcSchema::IfcSpace*, gp_Pnt>> semanticDataList;
+			std::vector < IfcSchema::IfcSpace* > semanticDataList;
 			for (size_t j = 0; j < cSize; j++)
 			{
 				BRepClass3d_SolidClassifier insideChecker;
@@ -973,42 +1021,24 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 					if (!insideChecker.State())
 					{
-						semanticDataList.emplace_back(std::make_tuple(std::get<0>(cluster->getHelper(j)->getRLookup(k)), centerPoints[k]));
+						semanticDataList.emplace_back(std::get<0>(cluster->getHelper(j)->getRLookup(k)));
 					}
 				}
 				break;
 			}
 
-			// unload semantic data
-			std::string semanticName = "Automatic Space";
-			std::string semanticLongName = "Automatic Space: " + std::to_string(roomnum);
-			std::string semanticDescription = "";
-
-			if (semanticDataList.size() == 1)
-			{
-				IfcSchema::IfcSpace* matchingSpaceObject = std::get<0>(semanticDataList[0]);
-				if (matchingSpaceObject->hasName()) { semanticName = matchingSpaceObject->Name(); }
-				if (matchingSpaceObject->hasLongName()) { semanticLongName = matchingSpaceObject->LongName(); }
-				if (matchingSpaceObject->hasDescription()) { semanticDescription = matchingSpaceObject->Description(); }
-			}
-			if (semanticDataList.size() > 1) // TODO find solution for when multiple semantic data is found
-			{
-				IfcSchema::IfcSpace* matchingSpaceObject = std::get<0>(semanticDataList[0]);
-				if (matchingSpaceObject->hasName()) { semanticName = matchingSpaceObject->Name(); }
-				if (matchingSpaceObject->hasLongName()) { semanticLongName = matchingSpaceObject->LongName(); }
-				if (matchingSpaceObject->hasDescription()) { semanticDescription = matchingSpaceObject->Description(); }
-			}
+			std::vector<std::string> semanticData = getSemanticMatch(semanticDataList, roomnum);
 
 #ifdef USE_IFC4
 			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
 				IfcParse::IfcGlobalId(),														// GlobalId
 				0,																				// OwnerHistory
-				semanticName,																	// Name
-				semanticDescription,																// Description
+				semanticData[0],																// Name
+				semanticData[2],																// Description
 				boost::none,																	// Object type
 				t,																				// Object Placement	
 				roomRep,																		// Representation
-				semanticLongName,															// Long name
+				semanticData[1],																// Long name
 				IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT,			// Composition Type	
 				boost::none,																	// Predefined Type
 				boost::none																		// Elevation with Flooring

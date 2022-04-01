@@ -406,7 +406,20 @@ void helper::correctRooms()
 	{
 		BRepGProp::VolumeProperties(std::get<1>(roomValues[i]), gprop);
 		roomVolume.emplace_back(gprop.Mass());
-		roomCenterPoints_.emplace_back(gprop.CentreOfMass()); // TODO make functioing in convex
+
+		BRepClass3d_SolidClassifier insideChecker;
+		insideChecker.Load(std::get<1>(roomValues[i]));
+		gp_Pnt potentialCenter = gprop.CentreOfMass();
+
+		insideChecker.Perform(potentialCenter, 0.001);
+
+		//if (insideChecker.State())
+		{
+			roomCenterPoints_.emplace_back(gprop.CentreOfMass());
+			continue;
+		}
+
+
 
 	}
 
