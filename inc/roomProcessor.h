@@ -7,8 +7,6 @@
 #include <BOPAlgo_Splitter.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
-#include <STEPControl_Writer.hxx>
-#include <STEPControl_StepModelType.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 
@@ -117,7 +115,8 @@ private:
 	std::vector<TopoDS_Face> getPartialFaces(std::vector<int> roomIndx, int voxelIndx);
 
 	TopoDS_Face getLowestFace(TopoDS_Shape shape);
-	gp_Pnt getLowestPoint(TopoDS_Shape shape);
+	std::vector<TopoDS_Face> getRoomFootprint(TopoDS_Shape shape);
+	gp_Pnt getLowestPoint(TopoDS_Shape shape, bool areaFilter = false);
 	gp_Pnt getHighestPoint(TopoDS_Shape shape);
 
 	// creates and adds a voxel object + checks with which products from the cluster it intersects

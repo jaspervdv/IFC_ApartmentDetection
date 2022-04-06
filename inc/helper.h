@@ -21,6 +21,8 @@
 #include <GProp_GProps.hxx>
 #include <BRepGProp.hxx>
 #include <BRepClass3d_SolidClassifier.hxx>
+#include <STEPControl_Writer.hxx>
+#include <STEPControl_StepModelType.hxx>
 
 #include <memory>
 
@@ -43,6 +45,9 @@ typedef std::tuple<IfcSchema::IfcSpace*, TopoDS_Shape> roomLookupValue;
 // helper functions that can be utilised everywhere
 gp_Pnt rotatePointWorld(gp_Pnt p, double angle);
 BoostPoint3D rotatePointWorld(BoostPoint3D p, double angle);
+
+void WriteToSTEP(TopoDS_Solid shape, std::string addition);
+void WriteToSTEP(TopoDS_Shape shape, std::string addition);
 
 void printPoint(gp_Pnt p);
 void printPoint(BoostPoint3D p);

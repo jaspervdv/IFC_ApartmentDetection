@@ -45,8 +45,10 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/RoomInRoom.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/covex_concave.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/rotatedRoomTest.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/BIM_Projekt_Golden_Nugget-Architektur_und_Ingenieurbau.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/SampleProject_Villa_2_7_animatedTrees.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/rac_basic_sample_project.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/RAC_basic_sample_project_ifc4.ifc"
 	"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_ARC_DigitalHub.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
@@ -284,7 +286,7 @@ int main(int argc, char** argv) {
 		field->makeRooms(hCluster);
 
 		auto endTime = std::chrono::high_resolution_clock::now();
-		//std::cout << "computing time = " << std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count() << std::endl;
+		std::cout << "computing time = " << std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count() << std::endl;
 
 		field->writeGraph(graphPath + "_graph.txt");
 	}

@@ -1,29 +1,5 @@
 #include "roomProcessor.h"
 
-void WriteToSTEP(TopoDS_Solid shape, std::string addition) {
-	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/step" + addition + ".stp";
-	
-	STEPControl_Writer writer;
-
-	writer.Transfer(shape, STEPControl_ManifoldSolidBrep);
-	IFSelect_ReturnStatus stat = writer.Write(path.c_str());
-
-	//std::cout << "stat: " << stat << std::endl;
-}
-
-void WriteToSTEP(TopoDS_Shape shape, std::string addition) {
-	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/step" + addition + ".stp";
-	STEPControl_Writer writer;
-
-	TopExp_Explorer expl;
-	for (expl.Init(shape, TopAbs_SOLID); expl.More(); expl.Next()) {
-		writer.Transfer(expl.Current(), STEPControl_ManifoldSolidBrep);
-	}
-
-	IFSelect_ReturnStatus stat = writer.Write(path.c_str());
-
-	//std::cout << "stat: " << stat << std::endl;
-}
 
 void voxelfield::createGraph(helperCluster* cluster) {
 	// update data to outside 
@@ -286,14 +262,93 @@ TopoDS_Face voxelfield::getLowestFace(TopoDS_Shape shape)
 	return faceList[lowestFaceIndx];
 }
 
-gp_Pnt voxelfield::getLowestPoint(TopoDS_Shape shape)
+std::vector<TopoDS_Face> voxelfield::getRoomFootprint(TopoDS_Shape shape)
+{
+	TopExp_Explorer expl;
+	std::vector<TopoDS_Face> faceList;
+	double lowestZ = 9999;
+	int lowestFaceIndx = -1;
+
+	for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next()) { faceList.emplace_back(TopoDS::Face(expl.Current())); }
+
+	// get horizontal faces
+	std::vector<TopoDS_Face> horizontalFaceList;
+	std::vector<double> horizontalFaceHeight;
+	double totalHeight = 0;
+
+	for (int j = 0; j < faceList.size(); j++)
+	{
+		double z = 0;
+		int c = 0;
+		bool flat = true;
+
+		for (expl.Init(faceList[j], TopAbs_VERTEX); expl.More(); expl.Next()){
+			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+			gp_Pnt p = BRep_Tool::Pnt(vertex);
+
+			if (c == 0)
+			{
+				z = p.Z();
+				c++;
+				continue;
+			}
+
+			if (z > p.Z() + 0.01 || z < p.Z() - 0.01)
+			{
+				flat = false;
+				break;
+			}
+		}
+
+		if (flat) 
+		{ 
+			horizontalFaceList.emplace_back(faceList[j]);
+			horizontalFaceHeight.emplace_back(z);
+			totalHeight += z;
+		}
+	}
+
+	double averageHeigth = totalHeight / horizontalFaceList.size();
+
+	std::vector<TopoDS_Face> footprint;
+	for (size_t i = 0; i < horizontalFaceHeight.size(); i++)
+	{
+		if (horizontalFaceHeight[i] < averageHeigth)
+		{
+			footprint.emplace_back(horizontalFaceList[i]);
+		}
+	}
+
+	return footprint;
+}
+
+gp_Pnt voxelfield::getLowestPoint(TopoDS_Shape shape, bool areaFilter)
 {
 	double lowestZ = 9999;
 	gp_Pnt lowestP(0,0,0);
 
-
 	TopExp_Explorer expl;
-	for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
+
+	TopoDS_Shape largestFace = shape;
+
+	if (areaFilter)
+	{
+		GProp_GProps gprop;
+		largestFace;
+		double area = 0;
+
+		for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next())
+		{
+			BRepGProp::SurfaceProperties(TopoDS::Face(expl.Current()), gprop);
+			if (area < gprop.Mass())
+			{
+				area = gprop.Mass();
+				largestFace = TopoDS::Face(expl.Current());
+			} 
+		}
+	}
+
+	for (expl.Init(largestFace, TopAbs_VERTEX); expl.More(); expl.Next())
 	{
 		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
 		gp_Pnt p = BRep_Tool::Pnt(vertex);
@@ -303,27 +358,26 @@ gp_Pnt voxelfield::getLowestPoint(TopoDS_Shape shape)
 			lowestZ = p.Z();
 			lowestP = p;
 		}
-
-		double sumX = 0;
-		double sumY = 0;
-		int aP = 0;
-
-		for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
-		{
-			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-			gp_Pnt p = BRep_Tool::Pnt(vertex);
-
-			if (p.Z() == lowestZ)
-			{
-				aP++;
-				sumX += p.X();
-				sumY += p.Y();
-			}
-		}
-
-		return gp_Pnt(sumX / aP, sumY / aP, lowestZ);
 	}
-	return lowestP;
+
+	double sumX = 0;
+	double sumY = 0;
+	int aP = 0;
+
+	for (expl.Init(largestFace, TopAbs_VERTEX); expl.More(); expl.Next())
+	{
+		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+		gp_Pnt p = BRep_Tool::Pnt(vertex);
+
+		if (p.Z() == lowestZ)
+		{
+			aP++;
+			sumX += p.X();
+			sumY += p.Y();
+		}
+	}
+
+	return gp_Pnt(sumX / aP, sumY / aP, lowestZ);
 }
 
 
@@ -413,8 +467,8 @@ void voxelfield::outputFieldToFile()
 		std::vector<gp_Pnt> pointList = it->second->getCornerPoints(planeRotation_);
 
 		//if (it->second->getRoomNumbers().size() == 0) { continue; }
-		//if (!it->second->getIsInside()) { continue; }
-		if (!it->second->getIsIntersecting()) { continue; }
+		if (!it->second->getIsInside()) { continue; }
+		//if (!it->second->getIsIntersecting()) { continue; }
 
 		for (size_t k = 0; k < pointList.size(); k++)
 		{
@@ -682,7 +736,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	int roomnum = 0;
 	int temps = 0;
 	
-	std::cout << "[INFO ]Room Growing" << std::endl;
+	std::cout << "[INFO]Room Growing" << std::endl;
 	for (int i = 0; i < totalVoxels_; i++)
 	{
 		if (Assignment_[i] == 0) // Find unassigned voxel
@@ -823,7 +877,66 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					LookupValue lookup = cluster->getHelper(j)->getLookup(qResult[k].second);
 					TopoDS_Shape shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup));
 
-					if (std::get<0>(lookup)->data().type()->name() == "IfcSlab")
+					int sCount = 0;
+
+					for (expl.Init(shape, TopAbs_SOLID); expl.More(); expl.Next()) {
+						aLSTools.Append(TopoDS::Solid(expl.Current()));
+						sCount++;
+					}
+
+					if (sCount == 0)
+					{
+						for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next()) {
+							//aLSTools.Append(TopoDS::Face(expl.Current()));
+						}
+					}
+
+
+					/*if (sCount == 0 && std::get<0>(lookup)->data().type()->name() == "IfcRoof")
+					{
+						std::cout << std::get<0>(lookup)->data().toString() << std::endl;
+
+						BRep_Builder brepBuilder2;
+						BRepBuilderAPI_Sewing brepSewer2;
+
+						TopoDS_Solid newSolid;
+						brepBuilder2.MakeSolid(newSolid);
+
+						std::vector<TopoDS_Face> faceList;
+						std::vector<TopoDS_Face> newFaceList;
+
+						for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next()) {
+							faceList.emplace_back(TopoDS::Face(expl.Current()));
+						}
+
+						for (size_t l = 0; l < faceList.size(); l++)
+						{
+							std::vector<gp_Pnt> facePointList;
+							TopoDS_Wire wire;
+							for (expl.Init(faceList[l], TopAbs_VERTEX); expl.More(); expl.Next())
+							{
+								TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+								facePointList.emplace_back(BRep_Tool::Pnt(vertex));
+							}
+
+							std::vector<TopoDS_Edge> faceEdgeList;
+							for (size_t m = 0; m < facePointList.size(); m += 2)
+							{
+								BRepBuilderAPI_MakeWire(wire, BRepBuilderAPI_MakeEdge(facePointList[m], facePointList[m + 1]));
+							}
+							newFaceList.emplace_back(BRepBuilderAPI_MakeFace(wire));
+						}
+
+						for (size_t l = 0; l < newFaceList.size(); l++) { brepSewer2.Add(newFaceList[l]); }
+
+						brepSewer2.Perform();
+						brepBuilder2.Add(newSolid, brepSewer2.SewedShape());
+						//aLSTools.Append(newSolid);
+					}*/
+					/*if (std::get<0>(lookup)->data().type()->name() == "IfcSlab" ||
+						std::get<0>(lookup)->data().type()->name() == "IfcRoof" || 
+						std::get<0>(lookup)->data().type()->name() == "IfcWall" || 
+						std::get<0>(lookup)->data().type()->name() == "IfcWindow")
 					{
 						aLSTools.Append(shape);
 					}
@@ -831,21 +944,25 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					{
 						for (expl.Init(shape, TopAbs_SOLID); expl.More(); expl.Next()) {
 							aLSTools.Append(TopoDS::Solid(expl.Current()));
+
 						}
-					}
+					}*/
 				}
 			}
+
 
 			aLSTools.Reverse();
 			aSplitter.SetArguments(aLSObjects);
 			aSplitter.SetTools(aLSTools);
 			aSplitter.SetRunParallel(Standard_True);
-			//aSplitter.SetFuzzyValue(0.0001);
+			aSplitter.SetFuzzyValue(0.001);
 			aSplitter.SetNonDestructive(Standard_True);
 
 			aSplitter.Perform();
 
 			const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
+
+			//WriteToSTEP(aResult, std::to_string(i));
 
 			// get roomshape
 			std::vector<TopoDS_Solid> solids;
@@ -885,94 +1002,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
 			outSideIndx.clear();
 
-			// eliminate outside shape by Z values
-			double maxZ = -9999;
-			double minZ = 9999;
-
-			for (expl.Init(sizedRoomShape, TopAbs_VERTEX); expl.More(); expl.Next()) {
-				gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
-
-				if (maxZ == -9999) { maxZ = p.Z(); }
-				else if (maxZ < p.Z()) { maxZ = p.Z(); }
-
-				if (minZ == 9999) { minZ = p.Z(); }
-				else if (minZ > p.Z()) { minZ = p.Z(); }
-
-			}
-
-			for (size_t j = 0; j < solids.size(); j++)
-			{
-				for (expl.Init(solids[j], TopAbs_VERTEX); expl.More(); expl.Next()) {
-					gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
-
-					if (p.Z() >= maxZ || p.Z() <= minZ)
-					{
-						outSideIndx.emplace_back(j);
-						break;
-					}
-				}
-			}
-
-			std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
-			for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
-			if (solids.size() == 0) { continue; }
-			outSideIndx.clear();
-
-			if (!hasInsidePoint)
-			{
-				// eliminate outside shape by contact to the original bbox
-				BRepClass3d_SolidClassifier insideChecker;
-				insideChecker.Load(sizedRoomShape);
-
-				for (size_t j = 0; j < solids.size(); j++)
-				{
-					for (expl.Init(solids[j], TopAbs_FACE); expl.More(); expl.Next()) {
-						TopoDS_Face currentFace = TopoDS::Face(expl.Current());
-
-						BRepGProp::VolumeProperties(currentFace, gprop);
-						insideChecker.Perform(gprop.CentreOfMass(), 0.01);
-
-						if (insideChecker.IsOnAFace()) {
-							outSideIndx.emplace_back(j);
-							break;
-						}
-					}
-				}
-
-				std::sort(outSideIndx.begin(), outSideIndx.end(), std::greater<int>());
-				for (size_t j = 0; j < outSideIndx.size(); j++) { solids.erase(solids.begin() + outSideIndx[j]); }
-
-				// select shape based on volume
-				if (solids.size() < 1) { continue; }
-				else if (solids.size() == 1)
-				{
-					BiggestRoom = 0;
-					BRepGProp::VolumeProperties(solids[BiggestRoom], gprop);
-					double volume = gprop.Mass();
-					roomAreaList_.emplace_back(volume);
-				}
-				else {
-
-					std::vector<gp_Pnt> roomShapePoints;
-					roomShapePoints.clear();
-
-					// filter for volume 
-					double maxVolume = 0;
-
-					for (size_t j = 0; j < solids.size(); j++)
-					{
-						BRepGProp::VolumeProperties(solids[j], gprop);
-						double volume = gprop.Mass();
-						if (maxVolume < volume)
-						{
-							maxVolume = volume;
-							BiggestRoom = j;
-						}
-					}
-					roomAreaList_.emplace_back(maxVolume);
-				}
-			}
-			else 
+			if(hasInsidePoint)
 			{
 				for (size_t j = 0; j < solids.size(); j++)
 				{
@@ -986,9 +1016,13 @@ void voxelfield::makeRooms(helperCluster* cluster)
 						BRepGProp::VolumeProperties(solids[BiggestRoom], gprop);
 						double volume = gprop.Mass();
 						roomAreaList_.emplace_back(volume);
+						break;
 					}
 
 				}
+			}
+			else {
+				continue;
 			}
 
 			if (BiggestRoom == -1)
@@ -1102,8 +1136,14 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			roomObjectList_.emplace_back(rObject);
 			updateConnections(unMovedUnitedScaledRoom, rObject, roomObjectList_, qBox, cluster);
 			roomnum++;
+
+
 		}
 	}
+
+
+	outputFieldToFile();
+
 	std::cout << std::endl;
 	std::cout << std::endl;
 
@@ -1124,7 +1164,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 	if (roomObjectList_.size() == 0) { return;}
 
-	//outputFieldToFile();
 	floorProcessor::sortObjects(cluster->getHelper(roomLoc), roomProducts);
 
 	// apply connectivity data to the rooms
@@ -1135,6 +1174,8 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		std::string description = "";
 		for (size_t i = 0; i <connections.size(); i++) { description = description + connections[i]->getSelf()->Name() + ", "; }
 		rObject->getSelf()->setDescription(rObject->getSelf()->Description() + description);
+
+
 	}
 
 	createGraph(cluster);
@@ -1150,7 +1191,8 @@ void voxelfield::updateConnections(TopoDS_Shape room, roomObject* rObject, std::
 
 	// find connectivity data
 	// Get lowest Face
-	TopoDS_Face roomfootprint = getLowestFace(room);
+	std::vector<TopoDS_Face> roomFootPrintList = getRoomFootprint(room);
+
 	TopoDS_Vertex lDoorP;
 
 	std::vector<Value> qResult;
@@ -1161,48 +1203,81 @@ void voxelfield::updateConnections(TopoDS_Shape room, roomObject* rObject, std::
 		qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
 		cluster->getHelper(j)->getConnectivityIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
 
+
+		/*if (rObject->getSelf()->LongName() == "Treppenhaus West - OG")
+		{
+			std::cout << rObject->getSelf()->LongName() << std::endl;
+			std::cout << qResult.size() << std::endl;
+			std::cout << std::endl;
+
+			for (size_t i = 0; i < roomFootPrintList.size(); i++)
+			{
+				printFaces(roomFootPrintList[i]);
+			}
+
+			//printFaces(roomfootprint);
+		}*/
+
 		for (size_t k = 0; k < qResult.size(); k++)
 		{
+
 			ConnectLookupValue lookup = cluster->getHelper(j)->getCLookup(qResult[k].second);
 			TopoDS_Shape objectShape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup));
 
-			gp_Pnt groundObjectPoint = getLowestPoint(objectShape);
-
 			if (std::get<0>(lookup)->data().type()->name() == "IfcDoor")
 			{
-				for (expl.Init(roomfootprint, TopAbs_EDGE); expl.More(); expl.Next())
+				bool found = false;
+
+
+				gp_Pnt groundObjectPoint = getLowestPoint(objectShape, true);
+
+				for (size_t l = 0; l < roomFootPrintList.size(); l++)
 				{
-					TopoDS_Edge edge = TopoDS::Edge(expl.Current());
-					TopExp_Explorer edgeExpl;
-					std::vector<gp_Pnt> edgePoints;
-					edgePoints.clear();
-
-					for (edgeExpl.Init(edge, TopAbs_VERTEX); edgeExpl.More(); edgeExpl.Next()) {
-						TopoDS_Vertex vertex = TopoDS::Vertex(edgeExpl.Current());
-						edgePoints.emplace_back(BRep_Tool::Pnt(vertex));
-					}
-
-					if (edgePoints.size() != 2) { std::cout << "error" << std::endl; }
-					double baseDistance = edgePoints[0].Distance(edgePoints[1]);
-					double triDistance = edgePoints[0].Distance(groundObjectPoint) + edgePoints[1].Distance(groundObjectPoint);
-
-					double buffer = 0.3;
-					if (abs(baseDistance - triDistance) <= buffer)
+					for (expl.Init(roomFootPrintList[l], TopAbs_EDGE); expl.More(); expl.Next())
 					{
-						doorCount++;
-						std::get<1>(lookup)->emplace_back(rObject);
+						TopoDS_Edge edge = TopoDS::Edge(expl.Current());
+						TopExp_Explorer edgeExpl;
+						std::vector<gp_Pnt> edgePoints;
+						edgePoints.clear();
 
-						if (std::get<1>(lookup)->size() == 2)
-						{
-							std::get<1>(lookup)[0][0]->addConnection(std::get<1>(lookup)[0][1]);
-							std::get<1>(lookup)[0][1]->addConnection(std::get<1>(lookup)[0][0]);
+						for (edgeExpl.Init(edge, TopAbs_VERTEX); edgeExpl.More(); edgeExpl.Next()) {
+							TopoDS_Vertex vertex = TopoDS::Vertex(edgeExpl.Current());
+							edgePoints.emplace_back(BRep_Tool::Pnt(vertex));
 						}
 
-						break;
+						if (edgePoints.size() != 2) { std::cout << "error" << std::endl; }
+
+						double baseDistance = edgePoints[0].Distance(edgePoints[1]);
+						double triDistance = edgePoints[0].Distance(groundObjectPoint) + edgePoints[1].Distance(groundObjectPoint);
+
+						double buffer = 0.3;
+
+						if (abs(baseDistance - triDistance) <= buffer)
+						{
+							doorCount++;
+							std::get<1>(lookup)->emplace_back(rObject);
+
+							if (std::get<1>(lookup)->size() == 2)
+							{
+								std::get<1>(lookup)[0][0]->addConnection(std::get<1>(lookup)[0][1]);
+								std::get<1>(lookup)[0][1]->addConnection(std::get<1>(lookup)[0][0]);
+							}
+
+							found = true;
+						}
+						if (found)
+						{
+							break;
+						}
 					}
 				}
+
+				
 			}
 			else {
+
+				gp_Pnt groundObjectPoint = getLowestPoint(objectShape);
+
 				gp_Trsf stairOffset;
 				stairOffset.SetTranslation({ 0,0,0 }, { 0,0,0.5 });
 

@@ -1,5 +1,34 @@
 #include "helper.h"
 
+
+void WriteToSTEP(TopoDS_Solid shape, std::string addition) {
+	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/step" + addition + ".stp";
+
+	STEPControl_Writer writer;
+
+	writer.Transfer(shape, STEPControl_ManifoldSolidBrep);
+	IFSelect_ReturnStatus stat = writer.Write(path.c_str());
+
+	//std::cout << "stat: " << stat << std::endl;
+}
+
+void WriteToSTEP(TopoDS_Shape shape, std::string addition) {
+	std::string path = "D:/Documents/Uni/Thesis/sources/Models/exports/step" + addition + ".stp";
+	STEPControl_Writer writer;
+
+	/*TopExp_Explorer expl;
+	for (expl.Init(shape, TopAbs_SOLID); expl.More(); expl.Next()) {
+		writer.Transfer(expl.Current(), STEPControl_ManifoldSolidBrep);
+	}
+
+	IFSelect_ReturnStatus stat = writer.Write(path.c_str());*/
+
+	writer.Transfer(shape, STEPControl_ManifoldSolidBrep);
+	IFSelect_ReturnStatus stat = writer.Write(path.c_str());
+
+	//std::cout << "stat: " << stat << std::endl;
+}
+
 void printPoint(gp_Pnt p) {
 	std::cout << p.X() << ", " << p.Y() << ", " << p.Z() << ", " << std::endl;
 }
@@ -166,6 +195,7 @@ std::vector<gp_Pnt> helper::getAllPoints(IfcSchema::IfcProduct::list::ptr produc
 		if (!product->hasRepresentation()) { continue; }
 		if (product->data().type()->name() == "IfcAnnotation") { continue; } // find points another way
 		if (product->data().type()->name() == "IfcSite") { continue; }
+		if (product->data().type()->name() == "IfcBuildingElementProxy") { continue; }
 
 		std::vector<gp_Pnt> temp = getObjectPoints(product);
 
@@ -349,6 +379,7 @@ void helper::indexGeo()
 
 	// add the floorslabs to the rtree
 	addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
+	addObjectToIndex<IfcSchema::IfcRoof::list::ptr>(file_->instances_by_type<IfcSchema::IfcRoof>());
 
 	// add the walls to the rtree
 	addObjectToIndex<IfcSchema::IfcWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcWall>());
@@ -367,6 +398,7 @@ void helper::indexGeo()
 
 	// add doors to the rtree (for the appartment detection)
 	addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+	addObjectToIndex<IfcSchema::IfcWindow::list::ptr>(file_->instances_by_type<IfcSchema::IfcWindow>());
 
 	// =================================================================================================
 	// connictivity objects indexing
@@ -655,14 +687,11 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 {
 	if (!product->hasRepresentation()) { return {}; }
 
-	//std::cout << product->data().toString() << std::endl;
-
 	BRep_Builder builder;
 	TopoDS_Compound comp;
 	builder.MakeCompound(comp);
 
 	auto representations = product->Representation()->Representations();
-
 	gp_Trsf trsf;
 	kernel_->convert_placement(product->ObjectPlacement(), trsf);
 	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
@@ -671,8 +700,6 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 		std::string geotype = representation->data().getArgument(2)->toString();
 		
 		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
-
-		//std::cout << representation->data().toString() << std::endl;
 
 		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
 		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems)); //TODO error avoidance 
@@ -685,7 +712,7 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 			rShape.Move(trsf * placement); // location in global space
 			
 			builder.Add(comp, rShape);
-		}
+		}	
 		break;
 	}
 	return comp;
