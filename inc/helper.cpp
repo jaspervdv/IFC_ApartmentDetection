@@ -123,6 +123,130 @@ gp_Pnt Point3DBTO(BoostPoint3D oP) {
 	return gp_Pnt(bg::get<0>(oP), bg::get<1>(oP), bg::get<2>(oP));
 }
 
+gp_Pnt getLowestPoint(TopoDS_Shape shape, bool areaFilter)
+{
+	double lowestZ = 9999;
+	gp_Pnt lowestP(0, 0, 0);
+
+	TopExp_Explorer expl;
+
+	TopoDS_Shape largestFace = shape;
+
+	if (areaFilter)
+	{
+		GProp_GProps gprop;
+		largestFace;
+		double area = 0;
+
+		for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next())
+		{
+			BRepGProp::SurfaceProperties(TopoDS::Face(expl.Current()), gprop);
+			if (area < gprop.Mass())
+			{
+				area = gprop.Mass();
+				largestFace = TopoDS::Face(expl.Current());
+			}
+		}
+	}
+
+	for (expl.Init(largestFace, TopAbs_VERTEX); expl.More(); expl.Next())
+	{
+		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+		gp_Pnt p = BRep_Tool::Pnt(vertex);
+
+		if (p.Z() < lowestZ)
+		{
+			lowestZ = p.Z();
+			lowestP = p;
+		}
+	}
+
+	double sumX = 0;
+	double sumY = 0;
+	int aP = 0;
+
+	for (expl.Init(largestFace, TopAbs_VERTEX); expl.More(); expl.Next())
+	{
+		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+		gp_Pnt p = BRep_Tool::Pnt(vertex);
+
+		if (p.Z() == lowestZ)
+		{
+			aP++;
+			sumX += p.X();
+			sumY += p.Y();
+		}
+	}
+
+	return gp_Pnt(sumX / aP, sumY / aP, lowestZ);
+}
+
+gp_Pnt getHighestPoint(TopoDS_Shape shape)
+{
+	double highestZ = -9999;
+	gp_Pnt highestP(0, 0, 0);
+
+	TopExp_Explorer expl;
+
+	for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
+	{
+		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+		gp_Pnt p = BRep_Tool::Pnt(vertex);
+
+		if (p.Z() > highestZ)
+		{
+			highestZ = p.Z();
+			highestP = p;
+		}
+	}
+
+	double sumX = 0;
+	double sumY = 0;
+	int aP = 0;
+
+	for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
+	{
+		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+		gp_Pnt p = BRep_Tool::Pnt(vertex);
+
+		if (p.Z() == highestZ)
+		{
+			aP++;
+			sumX += p.X();
+			sumY += p.Y();
+		}
+	}
+
+	return gp_Pnt(sumX / aP, sumY / aP, highestZ);
+}
+
+std::vector<IfcSchema::IfcProduct*> getNestedProducts(IfcSchema::IfcProduct* product) {
+	
+	std::vector<IfcSchema::IfcProduct*> productList;
+
+	if (!product->hasRepresentation())
+	{
+		IfcSchema::IfcRelAggregates::list::ptr decomposedProducts = product->IsDecomposedBy();
+		if (decomposedProducts->size() == 0) { return {}; }
+
+		for (auto et = decomposedProducts->begin(); et != decomposedProducts->end(); ++et) {
+			IfcSchema::IfcRelAggregates* aggregates = *et;
+			IfcSchema::IfcObjectDefinition::list::ptr aggDef = aggregates->RelatedObjects();
+
+			for (auto rt = aggDef->begin(); rt != aggDef->end(); ++rt) {
+				IfcSchema::IfcObjectDefinition* aggDef = *rt;
+				productList.emplace_back(aggDef->as<IfcSchema::IfcProduct>());
+			}
+		}
+	}
+	else if (product->hasRepresentation())
+	{
+		productList.emplace_back(product);
+	}
+
+	return productList;
+}
+
 helper::helper(std::string path) {
 
 	helper::findSchema(path);
@@ -425,6 +549,31 @@ bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduc
 	return bg::model::box < BoostPoint3D >(boostlllpoint, boosturrpoint);
 }
 
+bg::model::box < BoostPoint3D > helper::makeObjectBox(const std::vector<IfcSchema::IfcProduct*> products)
+{
+	std::vector<gp_Pnt> productVert;
+
+	for (size_t i = 0; i < products.size(); i++)
+	{
+		std::vector<gp_Pnt> singleVerts = getObjectPoints(products[i]);
+
+		for (size_t j = 0; j < singleVerts.size(); j++)
+		{
+			productVert.emplace_back(singleVerts[j]);
+		}
+	}
+
+	if (!productVert.size() > 1) { return bg::model::box < BoostPoint3D >({ 0,0,0 }, { 0,0,0 }); }
+
+	// only outputs 2 corners of the three needed corners!
+	auto box = rotatedBBoxDiagonal(productVert, originRot_);
+
+	BoostPoint3D boostlllpoint = Point3DOTB(std::get<0>(box));
+	BoostPoint3D boosturrpoint = Point3DOTB(std::get<1>(box));
+
+	return bg::model::box < BoostPoint3D >(boostlllpoint, boosturrpoint);
+}
+
 void helper::correctRooms() 
 {
 	// get all rooms in a cluser
@@ -590,14 +739,37 @@ template <typename T>
 void helper::addObjectToCIndex(T object) {
 	// add doors to the rtree (for the appartment detection)
 	for (auto it = object->begin(); it != object->end(); ++it) {
-		bg::model::box <BoostPoint3D> box = makeObjectBox(*it);
+
+		IfcSchema::IfcProduct* product = *it;
+		std::vector<IfcSchema::IfcProduct*> productList = getNestedProducts(product);
+
+		bg::model::box <BoostPoint3D> box = makeObjectBox(productList);
 		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
 			continue;
 		}
+
+		gp_Pnt groundObjectPoint = { 0, 0,9999 };
+		gp_Pnt topObjectPoint = {0, 0, -9999};
+		bool isDoor = false;
+
+		if (product->data().type()->name() == "IfcDoor") { isDoor = true; }
+
+		for (size_t i = 0; i < productList.size(); i++)
+		{
+			TopoDS_Shape productShape = getObjectShape(productList[i]);
+			gp_Pnt potGround = getLowestPoint(productShape, isDoor);
+			gp_Pnt potTop = getHighestPoint(productShape);
+
+			if (potGround.Z() < groundObjectPoint.Z()) { groundObjectPoint = potGround; }
+			if (potTop.Z() > topObjectPoint.Z()) { topObjectPoint = potTop; }
+		}
+
+		std::vector<gp_Pnt> connectingPoints = { groundObjectPoint, topObjectPoint };
+
 		cIndex_.insert(std::make_pair(box, (int)cIndex_.size()));
 		std::vector<roomObject*>* space = new std::vector<roomObject*>;
-		auto lookup = std::make_tuple(*it, space);
+		auto lookup = std::make_tuple(*it, connectingPoints, space);
 		connectivityLookup_.emplace_back(lookup);
 	}
 }
@@ -635,7 +807,6 @@ std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product
 	std::vector<gp_Pnt> pointList;
 
 	//std::cout << product->data().toString() << std::endl;
-
 	if (!product->hasRepresentation()) { return { gp_Pnt(0.0, 0.0, 0.0) }; }
 
 	auto representations = product->Representation()->Representations();
