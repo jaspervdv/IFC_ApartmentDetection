@@ -764,6 +764,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			TopExp_Explorer expl;
 
 			std::vector<Value> qResult;
+			std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList;
 			qResult.clear();
 
 			for (int j = 0; j < cSize; j++)
@@ -775,8 +776,12 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 				for (size_t k = 0; k < qResult.size(); k++)
 				{
+
 					LookupValue lookup = cluster->getHelper(j)->getLookup(qResult[k].second);
+					IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
 					TopoDS_Shape shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup));
+
+					qProductList.emplace_back(std::make_tuple(qProduct, shape));
 
 					int sCount = 0;
 
@@ -787,9 +792,13 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 					if (sCount == 0)
 					{
-						for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next()) {
-							//aLSTools.Append(TopoDS::Face(expl.Current()));
+						if (qProduct->data().type()->name() == "IfcSlab") // TODO replace this statement
+						{
+							for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next()) {
+								aLSTools.Append(TopoDS::Face(expl.Current()));
+							}
 						}
+
 					}
 
 
@@ -1018,19 +1027,97 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			IfcSchema::IfcSpace* room = new IfcSchema::IfcSpace(
 				IfcParse::IfcGlobalId(),														// GlobalId
 				0,																				// OwnerHistory
-				std::string("Space"),															// Name
-				std::string(std::to_string(roomnum)),											// Description
+				semanticData[0],																// Name
+				semanticData[2],																// Description
 				boost::none,																	// Object type
 				t,																				// Object Placement
 				roomRep,																		// Representation
-				std::string("Spaaaace"),														// Long name
+				semanticData[1],																// Long name
 				IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT,			// Composition Type	
 				IfcSchema::IfcInternalOrExternalEnum::IfcInternalOrExternal_INTERNAL,			// Interior or exterior space
 				boost::none																		// Elevation with Flooring
 			);
 #endif // USE_IFC4
 
+			// get rel space boundaries
+
+			BRepExtrema_DistShapeShape distanceMeasurer;
+			distanceMeasurer.LoadS1(unMovedUnitedScaledRoom);
+			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList;
+
+			for (size_t j = 0; j < qProductList.size(); j++)
+			{
+				IfcSchema::IfcProduct* qProduct = std::get<0>(qProductList[j]);
+				TopoDS_Shape qShape = std::get<1>(qProductList[j]);
+
+				bool isSmallDistanceObject = false;
+
+				if (qProduct->data().type()->name() == "IfcDoor" || qProduct->data().type()->name() == "IfcWindow")
+				{
+					isSmallDistanceObject = true;
+				}
+
+				distanceMeasurer.LoadS2(qShape);
+
+				distanceMeasurer.Perform();
+
+				double distance = distanceMeasurer.Value();
+
+				if (distance < 0.01 || isSmallDistanceObject && distance < 0.2)
+				{
+					BRepExtrema_DistShapeShape distanceMeasurerFace;
+					distanceMeasurerFace.LoadS1(qShape);
+
+					TopoDS_Face connectedFace;
+					double faceDistance = 99999;
+					int count = 0;
+
+					for (expl.Init(unMovedUnitedScaledRoom, TopAbs_FACE); expl.More(); expl.Next()) {
+						distanceMeasurerFace.LoadS2(TopoDS::Face(expl.Current()));
+
+						distanceMeasurerFace.Perform();
+
+						if (distanceMeasurerFace.NbSolution() > count && distanceMeasurerFace.Value() < faceDistance)
+						{
+							count = distanceMeasurerFace.NbSolution();
+							faceDistance = distanceMeasurerFace.Value();
+						}
+					}
+
+					for (expl.Init(unMovedUnitedScaledRoom, TopAbs_FACE); expl.More(); expl.Next()) {
+						distanceMeasurerFace.LoadS2(TopoDS::Face(expl.Current()));
+
+						distanceMeasurerFace.Perform();
+
+						if (count == distanceMeasurerFace.NbSolution() && distanceMeasurerFace.Value() == faceDistance)
+						{
+							connectedFace = TopoDS::Face(expl.Current()); // TODO make multple
+						}
+					}
+
+					IfcSchema::IfcRelSpaceBoundary* boundary = new IfcSchema::IfcRelSpaceBoundary(
+						IfcParse::IfcGlobalId(),
+						0,
+						std::string(""),
+						std::string(""),
+						room,
+						qProduct->as<IfcSchema::IfcElement>(),
+						0,
+						IfcSchema::IfcPhysicalOrVirtualEnum::IfcPhysicalOrVirtual_PHYSICAL,
+						IfcSchema::IfcInternalOrExternalEnum::IfcInternalOrExternal_INTERNAL
+					);
+
+					boundaryList.emplace_back(boundary);
+				}
+			}
+
 			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
+			
+			for (size_t j = 0; j < boundaryList.size(); j++)
+			{
+				cluster->getHelper(roomLoc)->getSourceFile()->addEntity(boundaryList[j]);
+			}
+
 			roomProducts.get()->push(room);
 
 			roomObject* rObject = new roomObject(room, roomObjectList_.size());

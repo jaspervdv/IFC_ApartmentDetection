@@ -9,6 +9,7 @@
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>

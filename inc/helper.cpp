@@ -227,6 +227,7 @@ std::vector<IfcSchema::IfcProduct*> getNestedProducts(IfcSchema::IfcProduct* pro
 	if (!product->hasRepresentation())
 	{
 		IfcSchema::IfcRelAggregates::list::ptr decomposedProducts = product->IsDecomposedBy();
+
 		if (decomposedProducts->size() == 0) { return {}; }
 
 		for (auto et = decomposedProducts->begin(); et != decomposedProducts->end(); ++et) {
@@ -761,8 +762,16 @@ void helper::addObjectToCIndex(T object) {
 			gp_Pnt potGround = getLowestPoint(productShape, isDoor);
 			gp_Pnt potTop = getHighestPoint(productShape);
 
-			if (potGround.Z() < groundObjectPoint.Z()) { groundObjectPoint = potGround; }
-			if (potTop.Z() > topObjectPoint.Z()) { topObjectPoint = potTop; }
+			if (!isDoor)
+			{
+				if (potGround.Z() < groundObjectPoint.Z()) { groundObjectPoint = potGround; }
+				if (potTop.Z() > topObjectPoint.Z()) { topObjectPoint = potTop; }
+			}
+			if (isDoor)
+			{
+				if (potGround.Z() < groundObjectPoint.Z()) { groundObjectPoint = potGround; }
+				if (potTop.Z() > topObjectPoint.Z()) { topObjectPoint = potTop; }
+			}
 		}
 
 		std::vector<gp_Pnt> connectingPoints = { groundObjectPoint, topObjectPoint };
