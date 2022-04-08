@@ -599,6 +599,18 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		return;
 	}
 
+	// remove all rell space boundaries
+	for (size_t i = 0; i < cSize; i++)
+	{
+		IfcSchema::IfcRelSpaceBoundary::list::ptr rSBList = cluster->getHelper(i)->getSourceFile()->instances_by_type<IfcSchema::IfcRelSpaceBoundary>();
+
+		for (IfcSchema::IfcRelSpaceBoundary::list::it it = rSBList->begin(); it != rSBList->end(); ++it)
+		{
+			IfcSchema::IfcRelSpaceBoundary* rSB= *it;
+			cluster->getHelper(i)->getSourceFile()->removeEntity(rSB);
+		}
+	}
+
 	GProp_GProps gprop;
 	IfcSchema::IfcProduct::list::ptr roomProducts(new IfcSchema::IfcProduct::list);
 
@@ -1040,22 +1052,19 @@ void voxelfield::makeRooms(helperCluster* cluster)
 #endif // USE_IFC4
 
 			// get rel space boundaries
-
 			BRepExtrema_DistShapeShape distanceMeasurer;
 			distanceMeasurer.LoadS1(unMovedUnitedScaledRoom);
+			
 			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList;
+			std::vector<IfcSchema::IfcDoor*> connectedDoors; // TODO improve door implementation
 
 			for (size_t j = 0; j < qProductList.size(); j++)
 			{
+				bool isConnected = true;
+
+				// find objects that are close
 				IfcSchema::IfcProduct* qProduct = std::get<0>(qProductList[j]);
 				TopoDS_Shape qShape = std::get<1>(qProductList[j]);
-
-				bool isSmallDistanceObject = false;
-
-				if (qProduct->data().type()->name() == "IfcDoor" || qProduct->data().type()->name() == "IfcWindow")
-				{
-					isSmallDistanceObject = true;
-				}
 
 				distanceMeasurer.LoadS2(qShape);
 
@@ -1063,38 +1072,40 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 				double distance = distanceMeasurer.Value();
 
-				if (distance < 0.01 || isSmallDistanceObject && distance < 0.2)
+				if (distance == 0) // if distance is 0 it is known it is connected
 				{
-					BRepExtrema_DistShapeShape distanceMeasurerFace;
-					distanceMeasurerFace.LoadS1(qShape);
+					isConnected = true;
+				}
+				else if (distance < 0.5)
+				{
+					TopoDS_Edge shortestEdge = BRepBuilderAPI_MakeEdge(distanceMeasurer.PointOnShape1(1), distanceMeasurer.PointOnShape2(1));
 
-					TopoDS_Face connectedFace;
-					double faceDistance = 99999;
-					int count = 0;
+					for (size_t k = 0; k < qProductList.size(); k++)
+					{
+						if (j == k) { continue; }
 
-					for (expl.Init(unMovedUnitedScaledRoom, TopAbs_FACE); expl.More(); expl.Next()) {
-						distanceMeasurerFace.LoadS2(TopoDS::Face(expl.Current()));
+						IfcSchema::IfcProduct* matchingProduct = std::get<0>(qProductList[k]);
 
-						distanceMeasurerFace.Perform();
+						IntTools_EdgeFace intersector;
+						intersector.SetEdge(shortestEdge);
 
-						if (distanceMeasurerFace.NbSolution() > count && distanceMeasurerFace.Value() < faceDistance)
+						for (expl.Init(std::get<1>(qProductList[k]), TopAbs_FACE); expl.More(); expl.Next()) {
+							intersector.SetFace(TopoDS::Face(expl.Current()));
+							intersector.Perform();
+
+							if (intersector.CommonParts().Size() > 0) {
+								isConnected = false;
+								break;
+							}
+						}
+						if (!isConnected)
 						{
-							count = distanceMeasurerFace.NbSolution();
-							faceDistance = distanceMeasurerFace.Value();
+							break;
 						}
 					}
-
-					for (expl.Init(unMovedUnitedScaledRoom, TopAbs_FACE); expl.More(); expl.Next()) {
-						distanceMeasurerFace.LoadS2(TopoDS::Face(expl.Current()));
-
-						distanceMeasurerFace.Perform();
-
-						if (count == distanceMeasurerFace.NbSolution() && distanceMeasurerFace.Value() == faceDistance)
-						{
-							connectedFace = TopoDS::Face(expl.Current()); // TODO make multple
-						}
-					}
-
+				}
+				if (isConnected)
+				{
 					IfcSchema::IfcRelSpaceBoundary* boundary = new IfcSchema::IfcRelSpaceBoundary(
 						IfcParse::IfcGlobalId(),
 						0,

@@ -35,7 +35,7 @@ namespace bgi = boost::geometry::index;
 
 typedef bg::model::point<double, 3, bg::cs::cartesian> BoostPoint3D;
 typedef std::pair<bg::model::box<BoostPoint3D>, int> Value;
-typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>> LookupValue;
+typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>, bool, TopoDS_Shape*> LookupValue;
 typedef std::tuple<IfcSchema::IfcProduct*,std::vector<gp_Pnt>, std::vector<roomObject*>*> ConnectLookupValue;
 typedef std::tuple<IfcSchema::IfcSpace*, TopoDS_Shape> roomLookupValue;
 
@@ -144,8 +144,8 @@ private:
 	std::vector<gp_Pnt> getAllPoints(IfcSchema::IfcProduct::list::ptr products);
 
 	// returns a bbox of a ifcproduct that functions with boost
-	bg::model::box <BoostPoint3D> makeObjectBox(const IfcSchema::IfcProduct* product);
-	bg::model::box <BoostPoint3D> makeObjectBox(const std::vector<IfcSchema::IfcProduct*> products);
+	bg::model::box <BoostPoint3D> makeObjectBox(IfcSchema::IfcProduct* product);
+	bg::model::box <BoostPoint3D> makeObjectBox(std::vector<IfcSchema::IfcProduct*> products);
 
 	std::vector<std::vector<gp_Pnt>> triangulateProduct(IfcSchema::IfcProduct* product);
 
@@ -239,11 +239,11 @@ public:
 
 	auto getRoomCenters() { return roomCenterPoints_; }
 
-	std::vector<gp_Pnt> getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges = false);
+	std::vector<gp_Pnt> getObjectPoints(IfcSchema::IfcProduct* product, bool sortEdges = false);
 
-	std::vector<TopoDS_Face> getObjectFaces(const IfcSchema::IfcProduct* product);
+	std::vector<TopoDS_Face> getObjectFaces(IfcSchema::IfcProduct* product);
 
-	TopoDS_Shape getObjectShape(const IfcSchema::IfcProduct* product);
+	TopoDS_Shape getObjectShape(IfcSchema::IfcProduct* product);
 
 	void setIsConstruct(bool b) { isConstruct = b; }
 	

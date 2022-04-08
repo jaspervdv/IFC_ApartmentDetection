@@ -526,16 +526,20 @@ void helper::indexGeo()
 	addObjectToIndex<IfcSchema::IfcWindow::list::ptr>(file_->instances_by_type<IfcSchema::IfcWindow>());
 
 	// =================================================================================================
-	// connictivity objects indexing
+	// connectivity objects indexing
 	addObjectToCIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
 	addObjectToCIndex<IfcSchema::IfcStair::list::ptr>(file_->instances_by_type<IfcSchema::IfcStair>());
 
 	// =================================================================================================
 	// room objects indexing
 	addObjectToRIndex<IfcSchema::IfcSpace::list::ptr>(file_->instances_by_type<IfcSchema::IfcSpace>());
+
+	// =================================================================================================
+	// opening indexing
+
 }
 
-bg::model::box < BoostPoint3D > helper::makeObjectBox(const IfcSchema::IfcProduct* product)
+bg::model::box < BoostPoint3D > helper::makeObjectBox(IfcSchema::IfcProduct* product)
 {
 	std::vector<gp_Pnt> productVert = getObjectPoints(product);
 
@@ -731,7 +735,7 @@ void helper::addObjectToIndex(T object) {
 		}
 		index_.insert(std::make_pair(box, (int) index_.size()));
 		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(*it);
-		auto lookup = std::make_tuple(*it, triangleMeshList);
+		auto lookup = std::make_tuple(*it, triangleMeshList, false, nullptr);
 		productLookup_.emplace_back(lookup);
 	}
 }
@@ -811,7 +815,7 @@ IfcSchema::IfcOwnerHistory* helper::getHistory()
 	return *ownerHistories.get()->begin();
 }
 
-std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product, bool sortEdges)
+std::vector<gp_Pnt> helper::getObjectPoints(IfcSchema::IfcProduct* product, bool sortEdges)
 {
 	std::vector<gp_Pnt> pointList;
 
@@ -845,7 +849,7 @@ std::vector<gp_Pnt> helper::getObjectPoints(const IfcSchema::IfcProduct* product
 
 }
 
-std::vector<TopoDS_Face> helper::getObjectFaces(const IfcSchema::IfcProduct* product)
+std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product)
 {
 	std::vector<TopoDS_Face> faceList;
 
@@ -863,7 +867,7 @@ std::vector<TopoDS_Face> helper::getObjectFaces(const IfcSchema::IfcProduct* pro
 	return faceList;
 }
 
-TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
+TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 {
 	if (!product->hasRepresentation()) { return {}; }
 
@@ -873,7 +877,46 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 
 	auto representations = product->Representation()->Representations();
 	gp_Trsf trsf;
-	kernel_->convert_placement(product->ObjectPlacement(), trsf);
+
+	//================
+
+	IfcSchema::IfcRepresentation* ifc_representation = 0;
+	IfcGeom::IteratorSettings settings;
+
+	IfcSchema::IfcProductRepresentation* prodrep = product->Representation();
+	IfcSchema::IfcRepresentation::list::ptr reps = prodrep->Representations();
+
+	for (IfcSchema::IfcRepresentation::list::it it = reps->begin(); it != reps->end(); ++it) {
+		IfcSchema::IfcRepresentation* rep = *it;
+		if (rep->RepresentationIdentifier() == "Body") {
+			ifc_representation = rep;
+			break;
+		}
+	}
+
+	if (ifc_representation)
+	{
+		kernel_->convert_placement(product->ObjectPlacement(), trsf);
+		IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
+		
+		brep->geometry().begin();
+
+		for (auto it = brep->geometry().begin(); it != brep->geometry().end(); ++it)
+		{
+			const IfcGeom::IfcRepresentationShapeItem ob = *it;
+			TopoDS_Shape rShape = ob.Shape();
+			gp_Trsf placement = ob.Placement().Trsf();
+			rShape.Move(trsf * placement); // location in global space
+
+			builder.Add(comp, rShape);
+		}
+
+	}
+
+
+
+	//================
+	/*kernel_->convert_placement(product->ObjectPlacement(), trsf);
 	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
 		const IfcSchema::IfcRepresentation* representation = *et;
 
@@ -883,7 +926,6 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 
 		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
 		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems)); //TODO error avoidance 
-
 		// move to OpenCASCADE
 		for (size_t i = 0; i < ob.size(); i++)
 		{
@@ -894,7 +936,7 @@ TopoDS_Shape helper::getObjectShape(const IfcSchema::IfcProduct* product)
 			builder.Add(comp, rShape);
 		}	
 		break;
-	}
+	}*/
 	return comp;
 }
 
