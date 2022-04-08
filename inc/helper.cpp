@@ -735,7 +735,9 @@ void helper::addObjectToIndex(T object) {
 		}
 		index_.insert(std::make_pair(box, (int) index_.size()));
 		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(*it);
-		auto lookup = std::make_tuple(*it, triangleMeshList, false, nullptr);
+		TopoDS_Shape shape = getObjectShape(*it);
+
+		auto lookup = std::make_tuple(*it, triangleMeshList, shape, false, nullptr);
 		productLookup_.emplace_back(lookup);
 	}
 }
@@ -869,6 +871,13 @@ std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product)
 
 TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 {
+	auto search = shapeLookup_.find(product->data().id());
+	if (search != shapeLookup_.end())
+	{
+		return search->second;
+	}
+
+
 	if (!product->hasRepresentation()) { return {}; }
 
 	BRep_Builder builder;
@@ -878,10 +887,10 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 	auto representations = product->Representation()->Representations();
 	gp_Trsf trsf;
 
-	//================
-
 	IfcSchema::IfcRepresentation* ifc_representation = 0;
 	IfcGeom::IteratorSettings settings;
+	settings.DISABLE_BOOLEAN_RESULT;
+	settings.DISABLE_TRIANGULATION;
 
 	IfcSchema::IfcProductRepresentation* prodrep = product->Representation();
 	IfcSchema::IfcRepresentation::list::ptr reps = prodrep->Representations();
@@ -912,31 +921,8 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 		}
 
 	}
-
-
-
-	//================
-	/*kernel_->convert_placement(product->ObjectPlacement(), trsf);
-	for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
-		const IfcSchema::IfcRepresentation* representation = *et;
-
-		std::string geotype = representation->data().getArgument(2)->toString();
-		
-		if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
-
-		IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-		IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems)); //TODO error avoidance 
-		// move to OpenCASCADE
-		for (size_t i = 0; i < ob.size(); i++)
-		{
-			TopoDS_Shape rShape = ob.at(i).Shape();
-			gp_Trsf placement = ob.at(i).Placement().Trsf();
-			rShape.Move(trsf * placement); // location in global space
-			
-			builder.Add(comp, rShape);
-		}	
-		break;
-	}*/
+	
+	shapeLookup_[product->data().id()] = comp;
 	return comp;
 }
 

@@ -35,7 +35,7 @@ namespace bgi = boost::geometry::index;
 
 typedef bg::model::point<double, 3, bg::cs::cartesian> BoostPoint3D;
 typedef std::pair<bg::model::box<BoostPoint3D>, int> Value;
-typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>, bool, TopoDS_Shape*> LookupValue;
+typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>, TopoDS_Shape , bool, TopoDS_Shape*> LookupValue;
 typedef std::tuple<IfcSchema::IfcProduct*,std::vector<gp_Pnt>, std::vector<roomObject*>*> ConnectLookupValue;
 typedef std::tuple<IfcSchema::IfcSpace*, TopoDS_Shape> roomLookupValue;
 
@@ -133,6 +133,8 @@ private:
 	std::vector<ConnectLookupValue> connectivityLookup_;
 	std::vector<roomLookupValue> roomLookup_;
 	std::vector<gp_Pnt> roomCenterPoints_;
+
+	std::map < int, TopoDS_Shape > shapeLookup_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
