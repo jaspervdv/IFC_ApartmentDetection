@@ -871,26 +871,19 @@ std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product)
 
 TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 {
+	if (!product->hasRepresentation()) { return {}; }
+
 	auto search = shapeLookup_.find(product->data().id());
 	if (search != shapeLookup_.end())
 	{
 		return search->second;
 	}
 
-
-	if (!product->hasRepresentation()) { return {}; }
-
-	BRep_Builder builder;
-	TopoDS_Compound comp;
-	builder.MakeCompound(comp);
-
 	auto representations = product->Representation()->Representations();
-	gp_Trsf trsf;
 
 	IfcSchema::IfcRepresentation* ifc_representation = 0;
 	IfcGeom::IteratorSettings settings;
-	settings.DISABLE_BOOLEAN_RESULT;
-	settings.DISABLE_TRIANGULATION;
+	settings.DISABLE_OPENING_SUBTRACTIONS;
 
 	IfcSchema::IfcProductRepresentation* prodrep = product->Representation();
 	IfcSchema::IfcRepresentation::list::ptr reps = prodrep->Representations();
@@ -905,25 +898,20 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 
 	if (ifc_representation)
 	{
+		gp_Trsf placement;
+		gp_Trsf trsf;
+		TopoDS_Compound comp;
+
 		kernel_->convert_placement(product->ObjectPlacement(), trsf);
 		IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
+		kernel_->convert_placement(ifc_representation, placement);
 		
-		brep->geometry().begin();
+		comp = brep->geometry().as_compound();
+		comp.Move(trsf * placement); // location in global space
 
-		for (auto it = brep->geometry().begin(); it != brep->geometry().end(); ++it)
-		{
-			const IfcGeom::IfcRepresentationShapeItem ob = *it;
-			TopoDS_Shape rShape = ob.Shape();
-			gp_Trsf placement = ob.Placement().Trsf();
-			rShape.Move(trsf * placement); // location in global space
-
-			builder.Add(comp, rShape);
-		}
-
+		shapeLookup_[product->data().id()] = comp;
+		return comp;
 	}
-	
-	shapeLookup_[product->data().id()] = comp;
-	return comp;
 }
 
 void helper::whipeObject(IfcSchema::IfcProduct* product)
