@@ -19,8 +19,14 @@
 #include <ifcgeom_schema_agnostic/Serialization.h>
 
 #include <GProp_GProps.hxx>
+#include <BOPAlgo_Splitter.hxx>
 #include <BRepGProp.hxx>
 #include <BRepClass3d_SolidClassifier.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
+#include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
 #include <STEPControl_Writer.hxx>
 #include <STEPControl_StepModelType.hxx>
 
@@ -35,7 +41,7 @@ namespace bgi = boost::geometry::index;
 
 typedef bg::model::point<double, 3, bg::cs::cartesian> BoostPoint3D;
 typedef std::pair<bg::model::box<BoostPoint3D>, int> Value;
-typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>, TopoDS_Shape , bool, TopoDS_Shape*> LookupValue;
+typedef std::tuple<IfcSchema::IfcProduct*, std::vector<std::vector<gp_Pnt>>, TopoDS_Shape , bool, TopoDS_Shape> LookupValue;
 typedef std::tuple<IfcSchema::IfcProduct*,std::vector<gp_Pnt>, std::vector<roomObject*>*> ConnectLookupValue;
 typedef std::tuple<IfcSchema::IfcSpace*, TopoDS_Shape> roomLookupValue;
 
@@ -135,6 +141,7 @@ private:
 	std::vector<gp_Pnt> roomCenterPoints_;
 
 	std::map < int, TopoDS_Shape > shapeLookup_;
+	std::map < int, TopoDS_Shape > untrimmedshapeLookup_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
@@ -148,6 +155,7 @@ private:
 	// returns a bbox of a ifcproduct that functions with boost
 	bg::model::box <BoostPoint3D> makeObjectBox(IfcSchema::IfcProduct* product);
 	bg::model::box <BoostPoint3D> makeObjectBox(std::vector<IfcSchema::IfcProduct*> products);
+	TopoDS_Solid makeSolidBox(gp_Pnt lll, gp_Pnt urr, double angle);
 
 	std::vector<std::vector<gp_Pnt>> triangulateProduct(IfcSchema::IfcProduct* product);
 

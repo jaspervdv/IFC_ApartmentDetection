@@ -1,14 +1,8 @@
 #include "helper.h"
 #include "floorProcessor.h"
 
-#include <BRepBuilderAPI_Sewing.hxx>
-#include <BRepBuilderAPI_MakeFace.hxx>
-#include <BRepBuilderAPI_MakeWire.hxx>
-#include <BOPAlgo_Splitter.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
-#include <BRepBuilderAPI_Transform.hxx>
-#include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <gce_MakeLin.hxx>
 #include <IntTools_EdgeFace.hxx>

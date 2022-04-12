@@ -791,7 +791,16 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 					LookupValue lookup = cluster->getHelper(j)->getLookup(qResult[k].second);
 					IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
-					TopoDS_Shape shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup));
+					TopoDS_Shape shape;
+
+					if (std::get<3>(lookup))
+					{
+						shape = std::get<4>(lookup);
+					}
+					else {
+						shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup));
+					}
+
 
 					qProductList.emplace_back(std::make_tuple(qProduct, shape));
 
@@ -812,7 +821,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 						}
 
 					}
-
 
 					/*if (sCount == 0 && std::get<0>(lookup)->data().type()->name() == "IfcRoof")
 					{

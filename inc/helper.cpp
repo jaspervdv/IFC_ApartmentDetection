@@ -579,6 +579,58 @@ bg::model::box < BoostPoint3D > helper::makeObjectBox(const std::vector<IfcSchem
 	return bg::model::box < BoostPoint3D >(boostlllpoint, boosturrpoint);
 }
 
+TopoDS_Solid helper::makeSolidBox(gp_Pnt lll, gp_Pnt urr, double angle)
+{
+	BRep_Builder brepBuilder;
+	BRepBuilderAPI_Sewing brepSewer;
+
+	TopoDS_Shell shell;
+	brepBuilder.MakeShell(shell);
+	TopoDS_Solid solidbox;
+	brepBuilder.MakeSolid(solidbox);
+
+	gp_Pnt p0(rotatePointWorld(lll, -angle));
+	gp_Pnt p1 = rotatePointWorld(gp_Pnt(lll.X(), urr.Y(), lll.Z()), -angle);
+	gp_Pnt p2 = rotatePointWorld(gp_Pnt(urr.X(), urr.Y(), lll.Z()), -angle);
+	gp_Pnt p3 = rotatePointWorld(gp_Pnt(urr.X(), lll.Y(), lll.Z()), -angle);
+
+	gp_Pnt p4(rotatePointWorld(urr, -angle));
+	gp_Pnt p5 = rotatePointWorld(gp_Pnt(lll.X(), urr.Y(), urr.Z()), -angle);
+	gp_Pnt p6 = rotatePointWorld(gp_Pnt(lll.X(), lll.Y(), urr.Z()), -angle);
+	gp_Pnt p7 = rotatePointWorld(gp_Pnt(urr.X(), lll.Y(), urr.Z()), -angle);
+
+	TopoDS_Edge edge0 = BRepBuilderAPI_MakeEdge(p0, p1);
+	TopoDS_Edge edge1 = BRepBuilderAPI_MakeEdge(p1, p2);
+	TopoDS_Edge edge2 = BRepBuilderAPI_MakeEdge(p2, p3);
+	TopoDS_Edge edge3 = BRepBuilderAPI_MakeEdge(p3, p0);
+
+	TopoDS_Edge edge4 = BRepBuilderAPI_MakeEdge(p4, p5);
+	TopoDS_Edge edge5 = BRepBuilderAPI_MakeEdge(p5, p6);
+	TopoDS_Edge edge6 = BRepBuilderAPI_MakeEdge(p6, p7);
+	TopoDS_Edge edge7 = BRepBuilderAPI_MakeEdge(p7, p4);
+
+	TopoDS_Edge edge8 = BRepBuilderAPI_MakeEdge(p0, p6);
+	TopoDS_Edge edge9 = BRepBuilderAPI_MakeEdge(p3, p7);
+	TopoDS_Edge edge10 = BRepBuilderAPI_MakeEdge(p2, p4);
+	TopoDS_Edge edge11 = BRepBuilderAPI_MakeEdge(p1, p5);
+
+	std::vector<TopoDS_Face> faceList;
+
+	faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge0, edge1, edge2, edge3)));
+	faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge4, edge5, edge6, edge7)));
+	faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge0, edge8, edge5, edge11)));
+	faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge3, edge9, edge6, edge8)));
+	faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge2, edge10, edge7, edge9)));
+	faceList.emplace_back(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge1, edge11, edge4, edge10)));
+
+	for (size_t k = 0; k < faceList.size(); k++) { brepSewer.Add(faceList[k]); }
+
+	brepSewer.Perform();
+	brepBuilder.Add(solidbox, brepSewer.SewedShape());
+
+	return solidbox;
+}
+
 void helper::correctRooms() 
 {
 	// get all rooms in a cluser
@@ -728,16 +780,218 @@ template <typename T>
 void helper::addObjectToIndex(T object) {
 	// add doors to the rtree (for the appartment detection)
 	for (auto it = object->begin(); it != object->end(); ++it) {
-		bg::model::box <BoostPoint3D> box = makeObjectBox(*it);
+		IfcSchema::IfcProduct* product = *it;
+
+		bg::model::box <BoostPoint3D> box = makeObjectBox(product);
 		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
-			continue;
+			return;
 		}
-		index_.insert(std::make_pair(box, (int) index_.size()));
-		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(*it);
-		TopoDS_Shape shape = getObjectShape(*it);
+		TopoDS_Shape shape = getObjectShape(product);
+		TopoDS_Shape cbbox;
+		bool hasCBBox = false;
 
-		auto lookup = std::make_tuple(*it, triangleMeshList, shape, false, nullptr);
+		//TODO get shape
+
+		if (product->data().type()->name() == "IfcDoor" || product->data().type()->name() == "IfcWindow")
+		{
+			// get potential nesting objects
+			std::vector<Value> qResult;
+			qResult.clear();
+			index_.query(bgi::intersects(box), std::back_inserter(qResult));
+
+			//printPoint(box.max_corner());
+			//printPoint(box.min_corner());
+
+			BRepExtrema_DistShapeShape distanceMeasurer;
+			distanceMeasurer.LoadS1(shape);
+
+			bool matchFound = false;
+			IfcSchema::IfcProduct* matchingUntrimmedProduct;
+			TopoDS_Shape matchingUntrimmedShape;
+
+
+			for (size_t i = 0; i < qResult.size(); i++)
+			{
+				LookupValue lookup = productLookup_[qResult[i].second];
+				IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
+
+				if (qProduct->data().type()->name() != "IfcWall" && 
+					qProduct->data().type()->name() != "IfcWallStandardCase" &&
+					qProduct->data().type()->name() != "IfcRoof" && 
+					qProduct->data().type()->name() != "IfcSlab")
+				{
+					continue;
+				}
+
+				auto search = untrimmedshapeLookup_.find(qProduct->data().id());
+				if (search == untrimmedshapeLookup_.end()) { continue; }
+
+				TopoDS_Shape qUntrimmedShape = search->second;
+
+				TopExp_Explorer expl;
+				for (expl.Init(qUntrimmedShape, TopAbs_SOLID); expl.More(); expl.Next()) {
+
+					// get distance to isolated actual object
+					distanceMeasurer.LoadS2(expl.Current());
+					distanceMeasurer.Perform();
+					double distance = distanceMeasurer.Value();
+
+					if (!distanceMeasurer.InnerSolution()) { continue; }
+					if (distance > 0.2) { continue; }
+
+					matchFound = true;
+					matchingUntrimmedProduct = qProduct;
+					matchingUntrimmedShape = qUntrimmedShape;
+
+					break;
+				}
+				if (matchFound) { break; }
+			}
+
+			if (matchFound) {
+				// find opening elements in the objects
+				BRep_Builder builder;
+				TopoDS_Compound Comp;
+				builder.MakeCompound(Comp);
+
+				IfcSchema::IfcElement* matchingUntrimmedElement = matchingUntrimmedProduct->as<IfcSchema::IfcElement>();
+				IfcSchema::IfcRelVoidsElement::list::ptr voidElementList = matchingUntrimmedElement->HasOpenings();
+
+				for (auto et = voidElementList->begin(); et != voidElementList->end(); ++et) {
+					IfcSchema::IfcRelVoidsElement* voidElement = *et;
+					IfcSchema::IfcFeatureElementSubtraction* openingElement = voidElement->RelatedOpeningElement();
+					TopoDS_Shape substractionShape = getObjectShape(openingElement);
+
+					//printFaces(substractionShape);
+					std::vector<TopoDS_Shape> potentialVoids;
+
+					TopExp_Explorer expl;
+					for (expl.Init(substractionShape, TopAbs_SOLID); expl.More(); expl.Next()) {
+						distanceMeasurer.LoadS2(expl.Current());
+						distanceMeasurer.Perform();
+						double distance = distanceMeasurer.Value();
+
+						if (distance > 0.2) { continue; }
+						if (!distanceMeasurer.InnerSolution()) { continue; }
+
+						BOPAlgo_Splitter aSplitter;
+						TopTools_ListOfShape aLSObjects;
+						aLSObjects.Append(expl.Current());
+						TopTools_ListOfShape aLSTools;
+						aLSTools.Append(matchingUntrimmedShape);
+
+						aLSTools.Reverse();
+						aSplitter.SetArguments(aLSObjects);
+						aSplitter.SetTools(aLSTools);
+						aSplitter.SetRunParallel(Standard_True);
+						aSplitter.SetNonDestructive(Standard_True);
+
+						aSplitter.Perform();
+
+						potentialVoids.emplace_back(aSplitter.Shape()); // result of the operation
+					}
+
+					for (size_t i = 0; i < potentialVoids.size(); i++)
+					{
+						for (expl.Init(potentialVoids[i], TopAbs_SOLID); expl.More(); expl.Next()) {
+
+							distanceMeasurer.LoadS2(expl.Current());
+							distanceMeasurer.Perform();
+							double distance = distanceMeasurer.Value();
+
+							if (distance > 0.2) { continue; }
+							if (!distanceMeasurer.InnerSolution()) { continue; }
+
+							builder.Add(Comp, expl.Current());
+						}
+					}					
+				}
+				hasCBBox = true;
+				cbbox = Comp;
+			}
+			else if (!matchFound)
+			{
+				// if no void was found
+				// find longest horizontal and vertical edge
+				std::vector<gp_Pnt> pointList;
+				std::vector<gp_Pnt> horizontalMaxEdge;
+				std::vector<gp_Pnt> verticalMaxEdge;
+
+				double maxHDistance = 0;
+				double maxVDistance = 0;
+
+				TopExp_Explorer expl;
+				for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
+				{
+					TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+					gp_Pnt p = BRep_Tool::Pnt(vertex);
+					pointList.emplace_back(p);
+				}
+
+				for (size_t i = 0; i < pointList.size(); i+=2)
+				{
+					gp_Pnt p1 = pointList[i];
+					gp_Pnt p2 = pointList[i + 1];
+
+					double vDistance = abs(p1.Z() - p2.Z());
+
+					if (maxVDistance < vDistance)
+					{
+						maxVDistance = vDistance;
+						verticalMaxEdge = { p1, p2 };
+					}
+
+					p1.SetZ(0);
+					p2.SetZ(0);
+
+					double hDistance = p1.Distance(p2);
+
+					if (hDistance > maxHDistance)
+					{
+						maxHDistance = hDistance;
+						horizontalMaxEdge = { p1, p2 };
+					}
+				}
+				// get rotation in xy plane
+				gp_Pnt bp(0, 0, 0);
+
+				double bpDistance0 = bp.Distance(horizontalMaxEdge[0]);
+				double bpDistance1 = bp.Distance(horizontalMaxEdge[1]);
+
+				if (bpDistance0 > bpDistance1)
+				{
+					std::reverse(horizontalMaxEdge.begin(), horizontalMaxEdge.end());
+				}
+
+				gp_Pnt p1 = horizontalMaxEdge[0];
+				gp_Pnt p2 = horizontalMaxEdge[1];
+
+				double angle = 0;
+
+				if (abs(p1.Y() - p2.Y()) != 0)
+				{
+					double os = p1.Distance(p2) / abs(p1.Y() - p2.Y());
+
+					angle = asin(os);
+				}
+
+				auto base = rotatedBBoxDiagonal(pointList, angle);
+				gp_Pnt lllPoint = std::get<0>(base);
+				gp_Pnt urrPoint = std::get<1>(base);
+
+				hasCBBox = true;
+				cbbox = makeSolidBox(lllPoint, urrPoint, angle);
+
+
+				// TODO get rotatiob in z plane
+
+			}
+
+		}
+		index_.insert(std::make_pair(box, (int)index_.size()));
+		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(product);
+		auto lookup = std::make_tuple(*it, triangleMeshList, shape, hasCBBox, cbbox);
 		productLookup_.emplace_back(lookup);
 	}
 }
@@ -873,6 +1127,17 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 {
 	if (!product->hasRepresentation()) { return {}; }
 
+	TopoDS_Compound comp;
+
+	bool hasHoles = false;
+	bool isFloor = false;
+
+	if (product->data().type()->name() == "IfcWall" ||
+		product->data().type()->name() == "IfcWallStandardCase" ||
+		product->data().type()->name() == "IfcRoof" ) { hasHoles = true; }
+	if (product->data().type()->name() == "IfcSlab") { isFloor = true; }
+
+	// filter with lookup
 	auto search = shapeLookup_.find(product->data().id());
 	if (search != shapeLookup_.end())
 	{
@@ -882,8 +1147,7 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 	auto representations = product->Representation()->Representations();
 
 	IfcSchema::IfcRepresentation* ifc_representation = 0;
-	IfcGeom::IteratorSettings settings;
-	settings.DISABLE_OPENING_SUBTRACTIONS;
+
 
 	IfcSchema::IfcProductRepresentation* prodrep = product->Representation();
 	IfcSchema::IfcRepresentation::list::ptr reps = prodrep->Representations();
@@ -896,11 +1160,13 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 		}
 	}
 
+	IfcGeom::IteratorSettings settings;
+	if (isFloor) { settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true); }
+
 	if (ifc_representation)
 	{
 		gp_Trsf placement;
 		gp_Trsf trsf;
-		TopoDS_Compound comp;
 
 		kernel_->convert_placement(product->ObjectPlacement(), trsf);
 		IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
@@ -910,8 +1176,21 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 		comp.Move(trsf * placement); // location in global space
 
 		shapeLookup_[product->data().id()] = comp;
-		return comp;
+
+		if (hasHoles)
+		{
+			settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true);
+			brep = kernel_->convert(settings, ifc_representation, product);
+			kernel_->convert_placement(ifc_representation, placement);
+
+			comp = brep->geometry().as_compound();
+			comp.Move(trsf * placement); // location in global space
+
+			untrimmedshapeLookup_[product->data().id()] = comp;
+		}
 	}
+
+	return comp;
 }
 
 void helper::whipeObject(IfcSchema::IfcProduct* product)
