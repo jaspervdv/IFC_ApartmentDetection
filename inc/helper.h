@@ -141,7 +141,7 @@ private:
 	std::vector<gp_Pnt> roomCenterPoints_;
 
 	std::map < int, TopoDS_Shape > shapeLookup_;
-	std::map < int, TopoDS_Shape > untrimmedshapeLookup_;
+	std::map < int, TopoDS_Shape > adjustedshapeLookup_;
 
 	// finds the ifc schema that is used in the supplied file
 	void findSchema(std::string path);
@@ -253,7 +253,9 @@ public:
 
 	std::vector<TopoDS_Face> getObjectFaces(IfcSchema::IfcProduct* product);
 
-	TopoDS_Shape getObjectShape(IfcSchema::IfcProduct* product);
+	TopoDS_Shape getObjectShape(IfcSchema::IfcProduct* product, bool adjusted = false);
+	void updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shape, bool adjusted = false);
+	void voidShapeAdjust();
 
 	void setIsConstruct(bool b) { isConstruct = b; }
 	

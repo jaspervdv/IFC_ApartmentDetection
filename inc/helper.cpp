@@ -525,6 +525,9 @@ void helper::indexGeo()
 	addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
 	addObjectToIndex<IfcSchema::IfcWindow::list::ptr>(file_->instances_by_type<IfcSchema::IfcWindow>());
 
+	// find valid voids
+	voidShapeAdjust();
+
 	// =================================================================================================
 	// connectivity objects indexing
 	addObjectToCIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
@@ -824,8 +827,8 @@ void helper::addObjectToIndex(T object) {
 					continue;
 				}
 
-				auto search = untrimmedshapeLookup_.find(qProduct->data().id());
-				if (search == untrimmedshapeLookup_.end()) { continue; }
+				auto search = adjustedshapeLookup_.find(qProduct->data().id());
+				if (search == adjustedshapeLookup_.end()) { continue; }
 
 				TopoDS_Shape qUntrimmedShape = search->second;
 
@@ -849,68 +852,7 @@ void helper::addObjectToIndex(T object) {
 				if (matchFound) { break; }
 			}
 
-			if (matchFound) {
-				// find opening elements in the objects
-				BRep_Builder builder;
-				TopoDS_Compound Comp;
-				builder.MakeCompound(Comp);
-
-				IfcSchema::IfcElement* matchingUntrimmedElement = matchingUntrimmedProduct->as<IfcSchema::IfcElement>();
-				IfcSchema::IfcRelVoidsElement::list::ptr voidElementList = matchingUntrimmedElement->HasOpenings();
-
-				for (auto et = voidElementList->begin(); et != voidElementList->end(); ++et) {
-					IfcSchema::IfcRelVoidsElement* voidElement = *et;
-					IfcSchema::IfcFeatureElementSubtraction* openingElement = voidElement->RelatedOpeningElement();
-					TopoDS_Shape substractionShape = getObjectShape(openingElement);
-
-					//printFaces(substractionShape);
-					std::vector<TopoDS_Shape> potentialVoids;
-
-					TopExp_Explorer expl;
-					for (expl.Init(substractionShape, TopAbs_SOLID); expl.More(); expl.Next()) {
-						distanceMeasurer.LoadS2(expl.Current());
-						distanceMeasurer.Perform();
-						double distance = distanceMeasurer.Value();
-
-						if (distance > 0.2) { continue; }
-						if (!distanceMeasurer.InnerSolution()) { continue; }
-
-						BOPAlgo_Splitter aSplitter;
-						TopTools_ListOfShape aLSObjects;
-						aLSObjects.Append(expl.Current());
-						TopTools_ListOfShape aLSTools;
-						aLSTools.Append(matchingUntrimmedShape);
-
-						aLSTools.Reverse();
-						aSplitter.SetArguments(aLSObjects);
-						aSplitter.SetTools(aLSTools);
-						aSplitter.SetRunParallel(Standard_True);
-						aSplitter.SetNonDestructive(Standard_True);
-
-						aSplitter.Perform();
-
-						potentialVoids.emplace_back(aSplitter.Shape()); // result of the operation
-					}
-
-					for (size_t i = 0; i < potentialVoids.size(); i++)
-					{
-						for (expl.Init(potentialVoids[i], TopAbs_SOLID); expl.More(); expl.Next()) {
-
-							distanceMeasurer.LoadS2(expl.Current());
-							distanceMeasurer.Perform();
-							double distance = distanceMeasurer.Value();
-
-							if (distance > 0.2) { continue; }
-							if (!distanceMeasurer.InnerSolution()) { continue; }
-
-							builder.Add(Comp, expl.Current());
-						}
-					}					
-				}
-				hasCBBox = true;
-				cbbox = Comp;
-			}
-			else if (!matchFound)
+			if (!matchFound)
 			{
 				// if no void was found
 				// find longest horizontal and vertical edge
@@ -1123,7 +1065,7 @@ std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product)
 	return faceList;
 }
 
-TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
+TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjusted)
 {
 	if (!product->hasRepresentation()) { return {}; }
 
@@ -1138,10 +1080,22 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 	if (product->data().type()->name() == "IfcSlab") { isFloor = true; }
 
 	// filter with lookup
-	auto search = shapeLookup_.find(product->data().id());
-	if (search != shapeLookup_.end())
+	if (!adjusted)
 	{
-		return search->second;
+		auto search = shapeLookup_.find(product->data().id());
+		if (search != shapeLookup_.end())
+		{
+			return search->second;
+		}
+	}
+
+	if (adjusted)
+	{
+		auto search = adjustedshapeLookup_.find(product->data().id());
+		if (search != adjustedshapeLookup_.end())
+		{
+			return search->second;
+		}
 	}
 
 	auto representations = product->Representation()->Representations();
@@ -1186,11 +1140,134 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product)
 			comp = brep->geometry().as_compound();
 			comp.Move(trsf * placement); // location in global space
 
-			untrimmedshapeLookup_[product->data().id()] = comp;
+			adjustedshapeLookup_[product->data().id()] = comp;
 		}
 	}
 
 	return comp;
+}
+
+void helper::updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shape, bool adjusted)
+{
+	if (!product->hasRepresentation()) { return; }
+
+	// filter with lookup
+	if (!adjusted)
+	{
+		auto search = shapeLookup_.find(product->data().id());
+		if (search == shapeLookup_.end())
+		{
+			return;
+		}
+
+		shapeLookup_[product->data().id()] = shape;
+	}
+
+	if (adjusted)
+	{
+		auto search = adjustedshapeLookup_.find(product->data().id());
+		if (search == adjustedshapeLookup_.end())
+		{
+			return;
+		}
+
+		adjustedshapeLookup_[product->data().id()] = shape;
+	}
+}
+
+void helper::voidShapeAdjust() 
+{
+	//IfcSchema::IfcWall::list::ptr wallList = file_->instances_by_type<IfcSchema::IfcWall>();
+	IfcSchema::IfcWallStandardCase::list::ptr wallList = file_->instances_by_type<IfcSchema::IfcWallStandardCase>();
+
+	for (auto it = wallList->begin(); it != wallList->end(); ++it) {
+		IfcSchema::IfcProduct* wallProduct = *it;
+
+		// get a basepoint of the wall
+		gp_Pnt p;
+		TopoDS_Shape untrimmedWallShape = getObjectShape(wallProduct, true);
+		TopExp_Explorer expl;
+		for (expl.Init(untrimmedWallShape, TopAbs_VERTEX); expl.More(); expl.Next()) {
+			p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
+			break;
+		}
+
+		// get the voids
+		IfcSchema::IfcElement* wallElement = wallProduct->as<IfcSchema::IfcElement>();
+		IfcSchema::IfcRelVoidsElement::list::ptr voidElementList = wallElement->HasOpenings();
+		std::vector<TopoDS_Shape> validVoidShapes;
+
+		// find if the voids are filled or not
+		for (auto et = voidElementList->begin(); et != voidElementList->end(); ++et) {
+			IfcSchema::IfcRelVoidsElement* voidElement = *et;
+			IfcSchema::IfcFeatureElementSubtraction* openingElement = voidElement->RelatedOpeningElement();
+			TopoDS_Shape substractionShape = getObjectShape(openingElement);
+
+			//printFaces(substractionShape);
+			
+			auto base = rotatedBBoxDiagonal(getObjectPoints(openingElement), 0);
+			gp_Pnt lllPoint = std::get<0>(base);
+			gp_Pnt urrPoint = std::get<1>(base);
+
+			//printPoint(lllPoint);
+			//printPoint(urrPoint);
+
+			std::vector<Value> qResult;
+			boost::geometry::model::box<BoostPoint3D> qBox = bg::model::box<BoostPoint3D>(Point3DOTB(lllPoint), Point3DOTB(urrPoint));
+			index_.query(bgi::intersects(qBox), std::back_inserter(qResult));
+
+			if (qResult.size() == 0)
+			{
+				validVoidShapes.emplace_back(substractionShape);
+				continue;
+			}
+
+			BRepClass3d_SolidClassifier insideChecker;
+			insideChecker.Load(substractionShape);
+
+			int counter = 0;
+
+			for (size_t i = 0; i < qResult.size(); i++)
+			{
+				LookupValue lookup = getLookup(qResult[i].second);
+				IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
+
+				if (qProduct->data().type()->name() != "IfcWindow" &&
+					qProduct->data().type()->name() != "IfcDoor")
+				{
+					continue;
+				}
+
+				TopoDS_Shape qShape = getObjectShape(qProduct);
+
+				TopExp_Explorer expl2;
+				for (expl2.Init(qShape, TopAbs_VERTEX); expl2.More(); expl2.Next()) {
+
+					insideChecker.Perform(BRep_Tool::Pnt(TopoDS::Vertex(expl2.Current())), 0.01);
+
+					if (!insideChecker.State()) { break; }
+					counter++;
+
+					break;
+				}
+			}
+
+			if (counter == 0)
+			{
+				validVoidShapes.emplace_back(substractionShape);
+				continue;
+			}		
+		}
+
+		if (validVoidShapes.size() == 0)
+		{
+			continue;
+		}
+		else {
+			// TODO write bool process
+		}
+	}
+
 }
 
 void helper::whipeObject(IfcSchema::IfcProduct* product)

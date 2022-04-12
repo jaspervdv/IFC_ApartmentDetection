@@ -793,7 +793,12 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
 					TopoDS_Shape shape;
 
-					if (std::get<3>(lookup))
+					if (qProduct->data().type()->name() == "IfcWall" ||
+						qProduct->data().type()->name() == "IfcWallStandardCase" )
+					{
+						shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup), true);
+					}
+					else if (std::get<3>(lookup))
 					{
 						shape = std::get<4>(lookup);
 					}
