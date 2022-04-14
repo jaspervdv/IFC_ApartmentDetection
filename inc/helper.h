@@ -249,9 +249,9 @@ public:
 
 	auto getRoomCenters() { return roomCenterPoints_; }
 
-	std::vector<gp_Pnt> getObjectPoints(IfcSchema::IfcProduct* product, bool sortEdges = false);
+	std::vector<gp_Pnt> getObjectPoints(IfcSchema::IfcProduct* product, bool sortEdges = false, bool simple = false);
 
-	std::vector<TopoDS_Face> getObjectFaces(IfcSchema::IfcProduct* product);
+	std::vector<TopoDS_Face> getObjectFaces(IfcSchema::IfcProduct* product, bool simple = false);
 
 	TopoDS_Shape getObjectShape(IfcSchema::IfcProduct* product, bool adjusted = false);
 	void updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shape, bool adjusted = false);

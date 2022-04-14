@@ -368,8 +368,8 @@ void voxelfield::outputFieldToFile()
 		std::vector<gp_Pnt> pointList = it->second->getCornerPoints(planeRotation_);
 
 		//if (it->second->getRoomNumbers().size() == 0) { continue; }
-		if (!it->second->getIsInside()) { continue; }
-		//if (!it->second->getIsIntersecting()) { continue; }
+		//if (!it->second->getIsInside()) { continue; }
+		if (!it->second->getIsIntersecting()) { continue; }
 
 		for (size_t k = 0; k < pointList.size(); k++)
 		{
@@ -793,17 +793,12 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
 					TopoDS_Shape shape;
 
-					if (qProduct->data().type()->name() == "IfcWall" ||
-						qProduct->data().type()->name() == "IfcWallStandardCase" )
-					{
-						shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup), true);
-					}
-					else if (std::get<3>(lookup))
+					 if (std::get<3>(lookup))
 					{
 						shape = std::get<4>(lookup);
 					}
 					else {
-						shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup));
+						shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup), true);
 					}
 
 
@@ -1154,7 +1149,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	}
 
 
-	outputFieldToFile();
+	//outputFieldToFile();
 
 	std::cout << std::endl;
 	std::cout << std::endl;
@@ -1510,7 +1505,7 @@ bool voxel::checkIntersecting(LookupValue lookup, std::vector<gp_Pnt> voxelPoint
 	std::vector<std::vector<int>> vets = getVoxelEdges();
 
 	IfcSchema::IfcProduct* product = std::get<0>(lookup);
-	std::vector<gp_Pnt> productPoints = h->getObjectPoints(product);
+	std::vector<gp_Pnt> productPoints = h->getObjectPoints(product, false, true);
 	
 	// check if any cornerpoints fall inside voxel
 	if (linearEqIntersection(productPoints, voxelPoints))
@@ -1520,7 +1515,7 @@ bool voxel::checkIntersecting(LookupValue lookup, std::vector<gp_Pnt> voxelPoint
 	}
 
 	// check with triangulated voxel
-	std::vector<gp_Pnt> productPointsEdges = h->getObjectPoints(product, true);
+	std::vector<gp_Pnt> productPointsEdges = h->getObjectPoints(product, true, true);
 
 	std::vector<std::vector<int>> triangleVoxels = getVoxelTriangles();
 	

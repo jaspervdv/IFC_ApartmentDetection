@@ -744,7 +744,7 @@ void helper::correctRooms()
 
 std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduct* product)
 {
-	std::vector<TopoDS_Face> faceList = getObjectFaces(product);
+	std::vector<TopoDS_Face> faceList = getObjectFaces(product, true);
 	std::vector<std::vector<gp_Pnt>> triangleMeshList;
 
 	for (size_t i = 0; i < faceList.size(); i++)
@@ -1014,7 +1014,7 @@ IfcSchema::IfcOwnerHistory* helper::getHistory()
 	return *ownerHistories.get()->begin();
 }
 
-std::vector<gp_Pnt> helper::getObjectPoints(IfcSchema::IfcProduct* product, bool sortEdges)
+std::vector<gp_Pnt> helper::getObjectPoints(IfcSchema::IfcProduct* product, bool sortEdges, bool simple)
 {
 	std::vector<gp_Pnt> pointList;
 
@@ -1050,7 +1050,7 @@ std::vector<gp_Pnt> helper::getObjectPoints(IfcSchema::IfcProduct* product, bool
 		}
 	}
 	else {
-		TopoDS_Shape rShape = getObjectShape(product);
+		TopoDS_Shape rShape = getObjectShape(product, simple);
 
 		TopExp_Explorer expl;
 		for (expl.Init(rShape, TopAbs_VERTEX); expl.More(); expl.Next())
@@ -1074,13 +1074,13 @@ std::vector<gp_Pnt> helper::getObjectPoints(IfcSchema::IfcProduct* product, bool
 
 }
 
-std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product)
+std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product, bool simple)
 {
 	std::vector<TopoDS_Face> faceList;
 
 	if (!product->hasRepresentation()) { return {}; }
 
-	TopoDS_Shape rShape = getObjectShape(product);
+	TopoDS_Shape rShape = getObjectShape(product, simple);
 
 	TopExp_Explorer expl;
 	for (expl.Init(rShape, TopAbs_FACE); expl.More(); expl.Next())
@@ -1095,6 +1095,13 @@ std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product)
 TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjusted)
 {
 	// filter with lookup
+	if (product->data().type()->name() != "IfcWall" &&
+		product->data().type()->name() != "IfcWallStandardCase" && 
+		product->data().type()->name() != "IfcRoof")
+	{
+		adjusted = false;
+	}
+
 	if (!adjusted)
 	{
 		auto search = shapeLookup_.find(product->data().id());
@@ -1215,6 +1222,11 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 	if (hasHoles)
 	{
 		adjustedshapeLookup_[product->data().id()] = simpleCollection;
+		
+	}
+
+	if (adjusted)
+	{
 		return simpleCollection;
 	}
 	
@@ -1407,10 +1419,8 @@ void helper::voidShapeAdjust(T products)
 			}
 			updateShapeLookup(wallProduct, finalShape, true);
 
-			//printFaces(finalShape);
 		}
 	}
-
 }
 
 void helper::whipeObject(IfcSchema::IfcProduct* product)
