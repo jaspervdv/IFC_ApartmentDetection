@@ -1537,13 +1537,11 @@ bool voxel::checkIntersecting(LookupValue lookup, std::vector<gp_Pnt> voxelPoint
 	{
 		std::vector<gp_Pnt> triangle = triangleMesh[i];
 
-
-		isIntersecting_ = true;
-
 		for (size_t k = 0; k < vets.size(); k++)
 		{
 			if (checkIntersecting({ voxelPoints[vets[k][0]], voxelPoints[vets[k][1]] }, triangle))
 			{
+				isIntersecting_ = true;
 				return true; 
 			}
 		}

@@ -777,8 +777,6 @@ std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduc
 
 	}
 
-
-
 	return triangleMeshList;
 }
 
