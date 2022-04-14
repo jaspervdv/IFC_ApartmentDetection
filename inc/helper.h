@@ -238,6 +238,7 @@ public:
 	const bgi::rtree<Value, bgi::rstar<treeDepth>>* getRoomIndexPointer() { return &rIndex_; }
 
 	auto getLookup(int i) { return productLookup_[i]; }
+	auto updateLookupTriangle(std::vector<std::vector<gp_Pnt>> triangleMeshList, int i) { std::get<1>(productLookup_[i]) = triangleMeshList; }
 	
 	auto getCLookup(int i) { return connectivityLookup_[i]; }
 
@@ -255,6 +256,7 @@ public:
 
 	TopoDS_Shape getObjectShape(IfcSchema::IfcProduct* product, bool adjusted = false);
 	void updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shape, bool adjusted = false);
+	void updateIndex(IfcSchema::IfcProduct* product, TopoDS_Shape shape);
 	void applyVoids();
 
 	template <typename T>

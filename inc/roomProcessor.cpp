@@ -1149,7 +1149,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	}
 
 
-	//outputFieldToFile();
+	outputFieldToFile();
 
 	std::cout << std::endl;
 	std::cout << std::endl;
@@ -1514,18 +1514,15 @@ bool voxel::checkIntersecting(LookupValue lookup, std::vector<gp_Pnt> voxelPoint
 		return true;
 	}
 
-	// check with triangulated voxel
-	std::vector<gp_Pnt> productPointsEdges = h->getObjectPoints(product, true, true);
-
 	std::vector<std::vector<int>> triangleVoxels = getVoxelTriangles();
 	
 	for (size_t i = 0; i < triangleVoxels.size(); i++)
 	{
 		std::vector<gp_Pnt> voxelTriangle = { voxelPoints[triangleVoxels[i][0]], voxelPoints[triangleVoxels[i][1]], voxelPoints[triangleVoxels[i][2]] };
 
-		for (size_t k = 0; k < productPointsEdges.size(); k+=2)
+		for (size_t k = 0; k < productPoints.size(); k+=2)
 		{
-			if (checkIntersecting({ productPointsEdges[k], productPointsEdges[k + 1] }, voxelTriangle))
+			if (checkIntersecting({ productPoints[k], productPoints[k + 1] }, voxelTriangle))
 			{
 				isIntersecting_ = true;
 				return true;
@@ -1540,11 +1537,13 @@ bool voxel::checkIntersecting(LookupValue lookup, std::vector<gp_Pnt> voxelPoint
 	{
 		std::vector<gp_Pnt> triangle = triangleMesh[i];
 
+
+		isIntersecting_ = true;
+
 		for (size_t k = 0; k < vets.size(); k++)
 		{
 			if (checkIntersecting({ voxelPoints[vets[k][0]], voxelPoints[vets[k][1]] }, triangle))
 			{
-				isIntersecting_ = true;
 				return true; 
 			}
 		}

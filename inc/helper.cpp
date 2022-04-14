@@ -745,6 +745,7 @@ void helper::correctRooms()
 std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduct* product)
 {
 	std::vector<TopoDS_Face> faceList = getObjectFaces(product, true);
+
 	std::vector<std::vector<gp_Pnt>> triangleMeshList;
 
 	for (size_t i = 0; i < faceList.size(); i++)
@@ -770,10 +771,13 @@ std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduc
 				gp_Pnt p = mesh->Nodes().Value(theTriangle(k)).Transformed(trsf);
 				trianglePoints.emplace_back(p);
 			}
+
 			triangleMeshList.emplace_back(trianglePoints);
 		}
 
 	}
+
+
 
 	return triangleMeshList;
 }
@@ -1261,6 +1265,33 @@ void helper::updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shap
 	}
 }
 
+void helper::updateIndex(IfcSchema::IfcProduct* product, TopoDS_Shape shape) {
+	
+	auto base = rotatedBBoxDiagonal(getObjectPoints(product), 0);
+	gp_Pnt lllPoint = std::get<0>(base);
+	gp_Pnt urrPoint = std::get<1>(base);
+
+	std::vector<Value> qResult;
+	boost::geometry::model::box<BoostPoint3D> qBox = bg::model::box<BoostPoint3D>(Point3DOTB(lllPoint), Point3DOTB(urrPoint));
+
+	index_.query(bgi::intersects(qBox), std::back_inserter(qResult));
+
+	for (size_t i = 0; i < qResult.size(); i++)
+	{
+		LookupValue lookup = getLookup(qResult[i].second);
+		IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
+
+		if (qProduct->data().id() != product->data().id())
+		{
+			continue;
+		}
+
+		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(product);
+
+		updateLookupTriangle(triangleMeshList, qResult[i].second);
+	}
+}
+
 void helper::applyVoids()
 {
 	voidShapeAdjust<IfcSchema::IfcWallStandardCase::list::ptr>(file_->instances_by_type<IfcSchema::IfcWallStandardCase>());
@@ -1418,6 +1449,7 @@ void helper::voidShapeAdjust(T products)
 				}
 			}
 			updateShapeLookup(wallProduct, finalShape, true);
+			updateIndex(wallProduct, finalShape);
 
 		}
 	}
