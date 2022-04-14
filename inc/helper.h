@@ -255,7 +255,10 @@ public:
 
 	TopoDS_Shape getObjectShape(IfcSchema::IfcProduct* product, bool adjusted = false);
 	void updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shape, bool adjusted = false);
-	void voidShapeAdjust();
+	void applyVoids();
+
+	template <typename T>
+	void voidShapeAdjust(T products);
 
 	void setIsConstruct(bool b) { isConstruct = b; }
 	

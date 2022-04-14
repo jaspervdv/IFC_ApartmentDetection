@@ -526,7 +526,7 @@ void helper::indexGeo()
 	addObjectToIndex<IfcSchema::IfcWindow::list::ptr>(file_->instances_by_type<IfcSchema::IfcWindow>());
 
 	// find valid voids
-	voidShapeAdjust();
+	applyVoids();
 
 	// =================================================================================================
 	// connectivity objects indexing
@@ -545,8 +545,7 @@ void helper::indexGeo()
 bg::model::box < BoostPoint3D > helper::makeObjectBox(IfcSchema::IfcProduct* product)
 {
 	std::vector<gp_Pnt> productVert = getObjectPoints(product);
-
-	if (!productVert.size() > 1) { return bg::model::box < BoostPoint3D >({ 0,0,0 }, { 0,0,0 }); }
+	if (!productVert.size() > 1) { return bg::model::box < BoostPoint3D >({0,0,0}, {0,0,0}); }
 
 	// only outputs 2 corners of the three needed corners!
 	auto box = rotatedBBoxDiagonal(productVert, originRot_);
@@ -783,12 +782,13 @@ template <typename T>
 void helper::addObjectToIndex(T object) {
 	// add doors to the rtree (for the appartment detection)
 	for (auto it = object->begin(); it != object->end(); ++it) {
-		IfcSchema::IfcProduct* product = *it;
+		IfcSchema::IfcProduct* product = *it;		
 
 		bg::model::box <BoostPoint3D> box = makeObjectBox(product);
 		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
-			return;
+			std::cout << "Failed: " + product->data().toString() << std::endl;
+			continue;
 		}
 		TopoDS_Shape shape = getObjectShape(product);
 		TopoDS_Shape cbbox;
@@ -911,7 +911,7 @@ void helper::addObjectToIndex(T object) {
 
 				double angle = 0;
 
-				if (abs(p1.Y() - p2.Y()) != 0)
+				if (abs(p1.Y() - p2.Y()) > 0.00001)
 				{
 					double os = p1.Distance(p2) / abs(p1.Y() - p2.Y());
 
@@ -926,11 +926,12 @@ void helper::addObjectToIndex(T object) {
 				cbbox = makeSolidBox(lllPoint, urrPoint, angle);
 
 
-				// TODO get rotatiob in z plane
+				// TODO get rotation in z plane
 
 			}
 
 		}
+
 		index_.insert(std::make_pair(box, (int)index_.size()));
 		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(product);
 		auto lookup = std::make_tuple(*it, triangleMeshList, shape, hasCBBox, cbbox);
@@ -1018,22 +1019,48 @@ std::vector<gp_Pnt> helper::getObjectPoints(IfcSchema::IfcProduct* product, bool
 	std::vector<gp_Pnt> pointList;
 
 	//std::cout << product->data().toString() << std::endl;
-	if (!product->hasRepresentation()) { return { gp_Pnt(0.0, 0.0, 0.0) }; }
+	if (!product->hasRepresentation()) { 
 
-	auto representations = product->Representation()->Representations();
+		std::vector<IfcSchema::IfcProduct*> productList;
 
-	gp_Trsf trsf;
-	kernel_->convert_placement(product->ObjectPlacement(), trsf);
+		IfcSchema::IfcRelAggregates::list::ptr decomposedProducts = product->IsDecomposedBy();
 
-	TopoDS_Shape rShape = getObjectShape(product);
+		if (decomposedProducts->size() == 0) { return { gp_Pnt(0.0, 0.0, 0.0) }; }
 
-	TopExp_Explorer expl;
-	for (expl.Init(rShape, TopAbs_VERTEX); expl.More(); expl.Next())
-	{
-		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-		gp_Pnt p = BRep_Tool::Pnt(vertex);
-		pointList.emplace_back(p);
+		for (auto et = decomposedProducts->begin(); et != decomposedProducts->end(); ++et) {
+			IfcSchema::IfcRelAggregates* aggregates = *et;
+			IfcSchema::IfcObjectDefinition::list::ptr aggDef = aggregates->RelatedObjects();
+
+			for (auto rt = aggDef->begin(); rt != aggDef->end(); ++rt) {
+				IfcSchema::IfcObjectDefinition* aggDef = *rt;
+				productList.emplace_back(aggDef->as<IfcSchema::IfcProduct>());
+			}
+		}
+
+		for (size_t i = 0; i < productList.size(); i++)
+		{
+			TopoDS_Shape rShape = getObjectShape(productList[i]);
+			TopExp_Explorer expl;
+			for (expl.Init(rShape, TopAbs_VERTEX); expl.More(); expl.Next())
+			{
+				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+				gp_Pnt p = BRep_Tool::Pnt(vertex);
+				//pointList.emplace_back(p);
+			}
+		}
 	}
+	else {
+		TopoDS_Shape rShape = getObjectShape(product);
+
+		TopExp_Explorer expl;
+		for (expl.Init(rShape, TopAbs_VERTEX); expl.More(); expl.Next())
+		{
+			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+			gp_Pnt p = BRep_Tool::Pnt(vertex);
+			pointList.emplace_back(p);
+		}
+	}
+
 
 	if (!sortEdges) { return pointList; }
 
@@ -1067,18 +1094,6 @@ std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product)
 
 TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjusted)
 {
-	if (!product->hasRepresentation()) { return {}; }
-
-	TopoDS_Compound comp;
-
-	bool hasHoles = false;
-	bool isFloor = false;
-
-	if (product->data().type()->name() == "IfcWall" ||
-		product->data().type()->name() == "IfcWallStandardCase" ||
-		product->data().type()->name() == "IfcRoof" ) { hasHoles = true; }
-	if (product->data().type()->name() == "IfcSlab") { isFloor = true; }
-
 	// filter with lookup
 	if (!adjusted)
 	{
@@ -1098,53 +1113,112 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 		}
 	}
 
-	auto representations = product->Representation()->Representations();
+	// find representations
+	std::vector<IfcSchema::IfcProduct*> productList;
 
-	IfcSchema::IfcRepresentation* ifc_representation = 0;
+	if (!product->hasRepresentation()) { 
 
+		IfcSchema::IfcRelAggregates::list::ptr decomposedProducts = product->IsDecomposedBy();
 
-	IfcSchema::IfcProductRepresentation* prodrep = product->Representation();
-	IfcSchema::IfcRepresentation::list::ptr reps = prodrep->Representations();
+		if (decomposedProducts->size() == 0) { return { }; }
 
-	for (IfcSchema::IfcRepresentation::list::it it = reps->begin(); it != reps->end(); ++it) {
-		IfcSchema::IfcRepresentation* rep = *it;
-		if (rep->RepresentationIdentifier() == "Body") {
-			ifc_representation = rep;
-			break;
+		for (auto et = decomposedProducts->begin(); et != decomposedProducts->end(); ++et) {
+			IfcSchema::IfcRelAggregates* aggregates = *et;
+			IfcSchema::IfcObjectDefinition::list::ptr aggDef = aggregates->RelatedObjects();
+
+			for (auto rt = aggDef->begin(); rt != aggDef->end(); ++rt) {
+				IfcSchema::IfcObjectDefinition* aggDef = *rt;
+
+				IfcSchema::IfcProduct* addprod = aggDef->as<IfcSchema::IfcProduct>();
+
+				if (addprod->hasRepresentation())
+				{
+					productList.emplace_back(addprod);
+				}
+
+				
+			}
 		}
+		return {}; 
+	}
+	else {
+		productList.emplace_back(product);
 	}
 
-	IfcGeom::IteratorSettings settings;
-	if (isFloor) { settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true); }
+	int id = product->data().id();
+	
+	BRep_Builder builder;
+	TopoDS_Compound collection;
+	TopoDS_Compound simpleCollection;
+	builder.MakeCompound(collection);
+	builder.MakeCompound(simpleCollection);
 
-	if (ifc_representation)
+	bool hasHoles = false;
+	bool isFloor = false;
+
+	if (product->data().type()->name() == "IfcWall" ||
+		product->data().type()->name() == "IfcWallStandardCase" ||
+		product->data().type()->name() == "IfcRoof" ) { hasHoles = true; }
+	if (product->data().type()->name() == "IfcSlab") { isFloor = true; }
+
+	for (size_t i = 0; i < productList.size(); i++)
 	{
-		gp_Trsf placement;
-		gp_Trsf trsf;
+		TopoDS_Compound comp;
 
-		kernel_->convert_placement(product->ObjectPlacement(), trsf);
-		IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
-		kernel_->convert_placement(ifc_representation, placement);
-		
-		comp = brep->geometry().as_compound();
-		comp.Move(trsf * placement); // location in global space
+		IfcSchema::IfcRepresentation* ifc_representation = 0;
 
-		shapeLookup_[product->data().id()] = comp;
+		IfcSchema::IfcProductRepresentation* prodrep = product->Representation();
+		IfcSchema::IfcRepresentation::list::ptr reps = prodrep->Representations();
 
-		if (hasHoles)
+		for (IfcSchema::IfcRepresentation::list::it it = reps->begin(); it != reps->end(); ++it) {
+			IfcSchema::IfcRepresentation* rep = *it;
+			if (rep->RepresentationIdentifier() == "Body") {
+				ifc_representation = rep;
+				break;
+			}
+		}
+
+		IfcGeom::IteratorSettings settings;
+		if (isFloor) { settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true); }
+
+		if (ifc_representation)
 		{
-			settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true);
-			brep = kernel_->convert(settings, ifc_representation, product);
+			gp_Trsf placement;
+			gp_Trsf trsf;
+
+			kernel_->convert_placement(product->ObjectPlacement(), trsf);
+			IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
 			kernel_->convert_placement(ifc_representation, placement);
 
 			comp = brep->geometry().as_compound();
 			comp.Move(trsf * placement); // location in global space
 
-			adjustedshapeLookup_[product->data().id()] = comp;
+			builder.Add(collection, comp);
+
+			if (hasHoles)
+			{
+				settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true);
+				brep = kernel_->convert(settings, ifc_representation, product);
+				kernel_->convert_placement(ifc_representation, placement);
+
+				comp = brep->geometry().as_compound();
+				comp.Move(trsf * placement); // location in global space
+
+				builder.Add(simpleCollection, comp);				
+			}
 		}
+
 	}
 
-	return comp;
+	shapeLookup_[product->data().id()] = collection;
+
+	if (hasHoles)
+	{
+		adjustedshapeLookup_[product->data().id()] = simpleCollection;
+		return simpleCollection;
+	}
+	
+	return collection;
 }
 
 void helper::updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shape, bool adjusted)
@@ -1175,22 +1249,19 @@ void helper::updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shap
 	}
 }
 
-void helper::voidShapeAdjust() 
+void helper::applyVoids()
 {
-	//IfcSchema::IfcWall::list::ptr wallList = file_->instances_by_type<IfcSchema::IfcWall>();
-	IfcSchema::IfcWallStandardCase::list::ptr wallList = file_->instances_by_type<IfcSchema::IfcWallStandardCase>();
+	voidShapeAdjust<IfcSchema::IfcWallStandardCase::list::ptr>(file_->instances_by_type<IfcSchema::IfcWallStandardCase>());
+	voidShapeAdjust<IfcSchema::IfcWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcWall>());
+}
 
-	for (auto it = wallList->begin(); it != wallList->end(); ++it) {
+template <typename T>
+void helper::voidShapeAdjust(T products) 
+{
+	for (auto it = products->begin(); it != products->end(); ++it) {
 		IfcSchema::IfcProduct* wallProduct = *it;
-
-		// get a basepoint of the wall
-		gp_Pnt p;
 		TopoDS_Shape untrimmedWallShape = getObjectShape(wallProduct, true);
 		TopExp_Explorer expl;
-		for (expl.Init(untrimmedWallShape, TopAbs_VERTEX); expl.More(); expl.Next()) {
-			p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
-			break;
-		}
 
 		// get the voids
 		IfcSchema::IfcElement* wallElement = wallProduct->as<IfcSchema::IfcElement>();
@@ -1214,6 +1285,10 @@ void helper::voidShapeAdjust()
 
 			std::vector<Value> qResult;
 			boost::geometry::model::box<BoostPoint3D> qBox = bg::model::box<BoostPoint3D>(Point3DOTB(lllPoint), Point3DOTB(urrPoint));
+
+			//printPoint(lllPoint);
+			//printPoint(urrPoint);
+
 			index_.query(bgi::intersects(qBox), std::back_inserter(qResult));
 
 			if (qResult.size() == 0)
@@ -1225,7 +1300,7 @@ void helper::voidShapeAdjust()
 			BRepClass3d_SolidClassifier insideChecker;
 			insideChecker.Load(substractionShape);
 
-			int counter = 0;
+			bool inter = false;
 
 			for (size_t i = 0; i < qResult.size(); i++)
 			{
@@ -1233,7 +1308,8 @@ void helper::voidShapeAdjust()
 				IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
 
 				if (qProduct->data().type()->name() != "IfcWindow" &&
-					qProduct->data().type()->name() != "IfcDoor")
+					qProduct->data().type()->name() != "IfcDoor" &&
+					qProduct->data().type()->name() != "IfcColumn")
 				{
 					continue;
 				}
@@ -1245,26 +1321,93 @@ void helper::voidShapeAdjust()
 
 					insideChecker.Perform(BRep_Tool::Pnt(TopoDS::Vertex(expl2.Current())), 0.01);
 
-					if (!insideChecker.State()) { break; }
-					counter++;
+					if (insideChecker.State() || insideChecker.IsOnAFace()) {
+						inter = true;
+						break;
+					}
+				}
 
+
+				if (inter)
+				{
 					break;
 				}
 			}
 
-			if (counter == 0)
+			if (inter == false)
 			{
 				validVoidShapes.emplace_back(substractionShape);
 				continue;
 			}		
 		}
 
-		if (validVoidShapes.size() == 0)
+		if (validVoidShapes.size() == 0 )
 		{
 			continue;
 		}
-		else {
-			// TODO write bool process
+		else if (validVoidShapes.size() > 0 && voidElementList->size() > 0) {
+			// get a basepoint of the wall
+			std::vector<gp_Pnt> pList;;
+			for (expl.Init(untrimmedWallShape, TopAbs_VERTEX); expl.More(); expl.Next()) {
+				pList.emplace_back(BRep_Tool::Pnt(TopoDS::Vertex(expl.Current())));
+			}
+
+			// bool out voidShape
+			BOPAlgo_Splitter aSplitter;
+			TopTools_ListOfShape aLSObjects;
+			aLSObjects.Append(untrimmedWallShape);
+			TopTools_ListOfShape aLSTools;
+
+			TopExp_Explorer expl;
+			for (size_t i = 0; i < validVoidShapes.size(); i++)
+			{
+				aLSTools.Append(validVoidShapes[i]);
+			}
+
+			aLSTools.Reverse();
+			aSplitter.SetArguments(aLSObjects);
+			aSplitter.SetTools(aLSTools);
+			aSplitter.SetRunParallel(Standard_True);
+			aSplitter.SetNonDestructive(Standard_True);
+
+			aSplitter.Perform();
+
+			const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
+
+			TopoDS_Shape finalShape;
+			std::vector<TopoDS_Solid> solids;
+			for (expl.Init(aResult, TopAbs_SOLID); expl.More(); expl.Next()) {
+				solids.emplace_back(TopoDS::Solid(expl.Current()));
+			}
+
+			for (size_t i = 0; i < pList.size(); i++)
+			{
+				int count = 0;
+
+				for (size_t j = 0; j < solids.size(); j++)
+				{
+					for (expl.Init(solids[j], TopAbs_VERTEX); expl.More(); expl.Next()) {
+						gp_Pnt evalPoint = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
+						if (pList[i].X() == evalPoint.X() &&
+							pList[i].Y() == evalPoint.Y() &&
+							pList[i].Z() == evalPoint.Z() )
+						{
+							finalShape = solids[j];
+							count ++;
+							break;
+						}
+					}
+
+				}
+
+				if (count == 1)
+				{
+					break;
+				}
+			}
+			updateShapeLookup(wallProduct, finalShape, true);
+
+			//printFaces(finalShape);
 		}
 	}
 
