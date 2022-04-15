@@ -801,8 +801,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 						shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup), true);
 					}
 
-
-					qProductList.emplace_back(std::make_tuple(qProduct, shape));
+					qProductList.emplace_back(std::make_tuple(qProduct, cluster->getHelper(j)->getObjectShape(std::get<0>(lookup), false)));
 
 					int sCount = 0;
 
@@ -1080,35 +1079,76 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 				double distance = distanceMeasurer.Value();
 
-				if (distance == 0) // if distance is 0 it is known it is connected
+				if (distance > 0.5)
+				{
+					isConnected = false;
+				}
+				else if (distance < 0.0001) // if distance is 0 it is known it is connected
 				{
 					isConnected = true;
+
+
 				}
 				else if (distance < 0.5)
 				{
-					TopoDS_Edge shortestEdge = BRepBuilderAPI_MakeEdge(distanceMeasurer.PointOnShape1(1), distanceMeasurer.PointOnShape2(1));
+					int counter = 0;
 
-					for (size_t k = 0; k < qProductList.size(); k++)
+					double x1 = 0;
+					double x2 = 0;
+					double y1 = 0;
+					double y2 = 0;
+					double z1 = 0;
+					double z2 = 0;
+
+					for (size_t k = 1; k < distanceMeasurer.NbSolution(); k++)
 					{
-						if (j == k) { continue; }
+						gp_Pnt p1 = distanceMeasurer.PointOnShape1(k);
+						gp_Pnt p2 = distanceMeasurer.PointOnShape2(k);
 
-						IfcSchema::IfcProduct* matchingProduct = std::get<0>(qProductList[k]);
+						x1 += p1.X();
+						x2 += p2.X();
+						y1 += p1.Y();
+						y2 += p2.Y();
+						z1 += p1.Z();
+						z2 += p2.Z();
 
-						IntTools_EdgeFace intersector;
-						intersector.SetEdge(shortestEdge);
+						counter++;
+					}
 
-						for (expl.Init(std::get<1>(qProductList[k]), TopAbs_FACE); expl.More(); expl.Next()) {
-							intersector.SetFace(TopoDS::Face(expl.Current()));
-							intersector.Perform();
+					gp_Pnt p1n(x1 / counter, y1 / counter, z1 / counter);
+					gp_Pnt p2n(x2 / counter, y2 / counter, z2 / counter);
+					
+					if (isnan(p1n.X()) || isnan(p1n.Y()) || isnan(p1n.Z()) ||
+						isnan(p2n.X()) || isnan(p2n.Y()) || isnan(p2n.Z()))
+					{
+						isConnected = false;
+					}
+					else
+					{
+						TopoDS_Edge shortestEdge = BRepBuilderAPI_MakeEdge(p1n, p2n);
 
-							if (intersector.CommonParts().Size() > 0) {
-								isConnected = false;
+						for (size_t k = 0; k < qProductList.size(); k++)
+						{
+							if (j == k) { continue; }
+
+							IfcSchema::IfcProduct* matchingProduct = std::get<0>(qProductList[k]);
+
+							IntTools_EdgeFace intersector;
+							intersector.SetEdge(shortestEdge);
+
+							for (expl.Init(std::get<1>(qProductList[k]), TopAbs_FACE); expl.More(); expl.Next()) {
+								intersector.SetFace(TopoDS::Face(expl.Current()));
+								intersector.Perform();
+
+								if (intersector.CommonParts().Size() > 0) {
+									isConnected = false;
+									break;
+								}
+							}
+							if (!isConnected)
+							{
 								break;
 							}
-						}
-						if (!isConnected)
-						{
-							break;
 						}
 					}
 				}
