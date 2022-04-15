@@ -792,6 +792,7 @@ void helper::addObjectToIndex(T object) {
 			std::cout << "Failed: " + product->data().toString() << std::endl;
 			continue;
 		}
+
 		TopoDS_Shape shape = getObjectShape(product);
 		TopoDS_Shape cbbox;
 		bool hasCBBox = false;
@@ -814,7 +815,6 @@ void helper::addObjectToIndex(T object) {
 			bool matchFound = false;
 			IfcSchema::IfcProduct* matchingUntrimmedProduct;
 			TopoDS_Shape matchingUntrimmedShape;
-
 
 			for (size_t i = 0; i < qResult.size(); i++)
 			{
@@ -853,6 +853,7 @@ void helper::addObjectToIndex(T object) {
 				}
 				if (matchFound) { break; }
 			}
+
 
 			if (!matchFound)
 			{
@@ -897,6 +898,7 @@ void helper::addObjectToIndex(T object) {
 						horizontalMaxEdge = { p1, p2 };
 					}
 				}
+
 				// get rotation in xy plane
 				gp_Pnt bp(0, 0, 0);
 
@@ -915,18 +917,27 @@ void helper::addObjectToIndex(T object) {
 
 				if (abs(p1.Y() - p2.Y()) > 0.00001)
 				{
-					double os = p1.Distance(p2) / abs(p1.Y() - p2.Y());
-
+					double os = (p1.Y() - p2.Y()) / p1.Distance(p2);
 					angle = asin(os);
 				}
 
 				auto base = rotatedBBoxDiagonal(pointList, angle);
+				auto base2 = rotatedBBoxDiagonal(pointList, -angle);
+
 				gp_Pnt lllPoint = std::get<0>(base);
 				gp_Pnt urrPoint = std::get<1>(base);
+				double rot = angle;
+
+				if (lllPoint.Distance(urrPoint) > std::get<0>(base2).Distance(std::get<1>(base2)))
+				{
+					lllPoint = std::get<0>(base2);
+					urrPoint = std::get<1>(base2);
+
+					rot = -angle;
+				}				
 
 				hasCBBox = true;
-				cbbox = makeSolidBox(lllPoint, urrPoint, angle);
-
+				cbbox = makeSolidBox(lllPoint, urrPoint, rot);
 
 				// TODO get rotation in z plane
 
