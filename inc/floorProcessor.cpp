@@ -137,7 +137,12 @@ std::vector<TopoDS_Face> floorProcessor::getSlabFaces(std::vector<TopoDS_Shape> 
 				topHeight = faceHeight;
 			}
 		}
-		floorFaces.emplace_back(topFace);
+
+		if (topHeight != -9999)
+		{
+			floorFaces.emplace_back(topFace);
+		}
+
 	}
 	return floorFaces;
 }
@@ -631,7 +636,9 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 	{
 		IfcSchema::IfcProduct* product = *it;
 
-		if (!product->hasRepresentation()) { continue; }
+		if (!product->hasRepresentation()) {
+			continue;
+		}
 		if (product->data().type()->name() == "IfcSite") { continue; }
 
 		bool heightFound = false;
@@ -677,6 +684,9 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 		else {
 			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(product, false, true);
 
+			//std::cout << product->data().toString() << std::endl;
+			//std::cout << objectPoints.size() << std::endl;
+
 			double lowHeight = 9999;
 			for (size_t i = 0; i < objectPoints.size(); i++)
 			{
@@ -684,6 +694,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 				if (pHeight < lowHeight) { lowHeight = pHeight; }
 			}
 			height = lowHeight;
+			//std::cout << lowHeight << std::endl;
 		}
 
 		if (height == -9999) { continue; } // TODO what hits this!

@@ -1063,6 +1063,9 @@ std::vector<gp_Pnt> helper::getObjectPoints(IfcSchema::IfcProduct* product, bool
 		}
 	}
 	else {
+
+		//std::cout << product->data().toString() << std::endl;
+
 		TopoDS_Shape rShape = getObjectShape(product, simple);
 
 		TopExp_Explorer expl;
@@ -1198,10 +1201,52 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 			}
 		}
 
+		if (ifc_representation == 0)
+		{
+			for (IfcSchema::IfcRepresentation::list::it it = reps->begin(); it != reps->end(); ++it) {
+				IfcSchema::IfcRepresentation* rep = *it;
+
+				if (rep->RepresentationIdentifier() == "Annotation") {
+					ifc_representation = rep;
+					break;
+				}
+			}
+		}
+
+
 		IfcGeom::IteratorSettings settings;
 		if (isFloor) { settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true); }
 
-		if (ifc_representation)
+		if (!ifc_representation)
+		{
+			return {};
+		}
+
+		if (ifc_representation->RepresentationIdentifier() == "Annotation")
+		{
+			gp_Trsf trsf;
+			kernel_->convert_placement(product->ObjectPlacement(), trsf);
+
+			IfcSchema::IfcRepresentationItem::list::ptr representationItems = ifc_representation->Items();
+
+			for (auto it = representationItems->begin(); it != representationItems->end(); ++it)
+			{
+				IfcSchema::IfcRepresentationItem* representationItem = *it;
+
+				if (representationItem->data().type()->name() == "IfcTextLiteralWithExtent") { continue; }				
+				
+			}
+
+
+			//std::cout << representationItems->data().toString() << std::endl;
+
+			// data is never deleted, can be used later as internalized data
+			//IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
+
+
+
+		}
+		else if (ifc_representation->RepresentationIdentifier() == "Body")
 		{
 			gp_Trsf placement;
 			gp_Trsf trsf;
@@ -1211,7 +1256,7 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 			kernel_->convert_placement(ifc_representation, placement);
 
 			comp = brep->geometry().as_compound();
-			comp.Move(trsf * placement); // location in global space
+			comp.Move(trsf* placement); // location in global space
 
 			builder.Add(collection, comp);
 
@@ -1224,10 +1269,9 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 				comp = brep->geometry().as_compound();
 				comp.Move(trsf * placement); // location in global space
 
-				builder.Add(simpleCollection, comp);				
+				builder.Add(simpleCollection, comp);
 			}
 		}
-
 	}
 
 	shapeLookup_[product->data().id()] = collection;
