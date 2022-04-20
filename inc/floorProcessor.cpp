@@ -27,39 +27,20 @@ std::vector<TopoDS_Shape> floorProcessor::getSlabShapes(helper* data)
 {
 	std::vector<TopoDS_Shape> floorShapes;
 	IfcSchema::IfcSlab::list::ptr slabs = data->getSourceFile()->instances_by_type<IfcSchema::IfcSlab>();
-
-	auto kernel = data->getKernel();
+	IfcSchema::IfcRoof::list::ptr roofs = data->getSourceFile()->instances_by_type<IfcSchema::IfcRoof>();
 
 	for (IfcSchema::IfcSlab::list::it it = slabs->begin(); it != slabs->end(); ++it) {
-		const IfcSchema::IfcSlab* slab = *it;
+		IfcSchema::IfcProduct* slab = *it;
+		TopoDS_Shape floorShape = data->getObjectShape(slab);
 
-		// get the IfcShapeRepresentation
-		auto slabProduct = slab->Representation()->Representations();
+		floorShapes.emplace_back(floorShape);
+	}
 
-		//get the global coordinate of the local origin
-		gp_Trsf trsf;
-		kernel->convert_placement(slab->ObjectPlacement(), trsf);
+	for (IfcSchema::IfcRoof::list::it it = roofs->begin(); it != roofs->end(); ++it) {
+		IfcSchema::IfcRoof* roof = *it;
+		TopoDS_Shape roofShape = data->getObjectShape(roof);
 
-		for (auto et = slabProduct.get()->begin(); et != slabProduct.get()->end(); et++) {
-			const IfcSchema::IfcRepresentation* slabRepresentation = *et;
-
-			// select the body of the slabs (ignore the bounding boxes)
-			if (slabRepresentation->data().getArgument(1)->toString() == "'Body'")
-			{
-				// select the geometry format
-				auto slabItems = slabRepresentation->Items();
-
-				IfcSchema::IfcRepresentationItem* slabItem = *slabRepresentation->Items().get()->begin();
-
-				auto ob = kernel->convert(slabItem);
-
-				// move to OpenCASCADE
-				const TopoDS_Shape rShape = ob[0].Shape();
-				const TopoDS_Shape aShape = rShape.Moved(trsf); // location in global space
-
-				floorShapes.emplace_back(aShape);
-			}
-		}
+		floorShapes.emplace_back(roofShape);
 	}
 
 	return floorShapes;
@@ -660,138 +641,63 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 		gp_Trsf trsf;
 		if (product->hasObjectPlacement()) { kernel->convert_placement(product->ObjectPlacement(), trsf); }
 		else { 
-			
 		}
 		double height = -9999;
 
-		// floors are a special case due to them being placed based on their top elevation
-
 		bool hasBBox = false;
 
-		if (product->data().type()->name() == "IfcSlab")
+		// floors are a special case due to them being placed based on their top face instead of basepoint
+		if (product->data().type()->name() == "IfcSlab" || product->data().type()->name() == "IfcRoof")
 		{
-			for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
-				const IfcSchema::IfcRepresentation* representation = *et;
+			std::vector<TopoDS_Face> slabFaces = data->getObjectFaces(product, true);
+			TopExp_Explorer expl;
+			double tempHeight = -99999;
+			TopoDS_Face topFace;
 
-				// TODO might fail with angled slabs
-				if (representation->data().getArgument(1)->toString() == "'Body'")
+			for (size_t i = 0; i < slabFaces.size(); i++)
+			{
+				double z = slabFaces[i].Location().Transformation().TranslationPart().Z();
+
+				if (tempHeight < z)
 				{
-					IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-
-					auto ob = kernel->convert(representationItems);
-
-					// move to OpenCASCADE
-					const TopoDS_Shape rShape = ob[0].Shape();
-					gp_Trsf placement = ob.at(0).Placement().Trsf();
-					const TopoDS_Shape aShape = rShape.Moved(trsf * placement); // location in global space
-
-					// set variables for top face selection
-					TopoDS_Face topFace;
-					double topHeight = -9999;
-
-					// loop through all faces of slab
-					TopExp_Explorer expl;
-					for (expl.Init(aShape, TopAbs_FACE); expl.More(); expl.Next())
-					{
-						TopoDS_Face face = TopoDS::Face(expl.Current());
-						// select floor top face
-						double faceHeight = face.Location().Transformation().TranslationPart().Z();
-
-						if (faceHeight > topHeight) { topHeight = faceHeight; }
-					}
-					height = topHeight;
-					break;
+					tempHeight = z;
+					topFace = slabFaces[i];
 				}
 			}
+
+			double lowHeight = 9999;
+			for (expl.Init(topFace, TopAbs_VERTEX); expl.More(); expl.Next())
+			{
+				gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(expl.Current()));
+				double pHeight = p.Z();
+				if (pHeight < lowHeight) { lowHeight = pHeight; }
+			}
+			height = lowHeight;
 		}
 		else {
-			for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
-				const IfcSchema::IfcRepresentation* representation = *et;
+			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(product, false, true);
 
-				// select the bounding box of the objects
-				// the easy way of getting the placement height
-				if (representation->data().getArgument(2)->toString() == "'BoundingBox'") {
-					hasBBox = true;;
-
-					auto items = representation->Items();
-
-					if (items.get()->size() != 1)
-					{
-						std::cout << "[Warning] more than one item has been found at object with id: " << product->data().id() << std::endl;
-					}
-
-					IfcSchema::IfcRepresentationItem* item = *items.get()->begin();
-					std::string x = item->get("Corner")->toString();
-					x.erase(0, 1);
-
-					IfcUtil::IfcBaseClass* point = sourcefile->instance_by_id(std::stoi(x));
-
-					// get the height of the object
-					height = std::stod(point->data().getArgument(0)[0][2]->toString()) + trsf.TranslationPart().Z();
-					break;
-				}
-			}
-
-			// The challenging way of getting the placement height
-			if (!hasBBox)
+			double lowHeight = 9999;
+			for (size_t i = 0; i < objectPoints.size(); i++)
 			{
-				for (auto et = representations.get()->begin(); et != representations.get()->end(); et++) {
-					const IfcSchema::IfcRepresentation* representation = *et;
-
-					if (representation->data().getArgument(1)->toString() != "'Body'") { continue; }
-
-					std::string geotype = representation->data().getArgument(2)->toString();
-
-					if (geotype == "'Brep'" ||
-						geotype == "'SweptSolid'" ||
-						geotype == "'MappedRepresentation'" ||
-						geotype == "'Clipping'") {
-
-						IfcSchema::IfcRepresentationItem* representationItems = *representation->Items().get()->begin();
-						if (representationItems->data().type()->name() == "IfcFacetedBrepWithVoids") { break; } // TODO deal with outliers 
-
-						//IfcGeom::IfcRepresentationShapeItems ob(kernel->convert(representationItems));
-						std::unique_ptr<IfcGeom::IfcRepresentationShapeItems> ob = std::make_unique<IfcGeom::IfcRepresentationShapeItems>(kernel->convert(representationItems));
-						// move to OpenCASCADE
-						const TopoDS_Shape rShape = ob.get()->at(0).Shape();
-						gp_Trsf placement = ob.get()->at(0).Placement().Trsf();
-						const TopoDS_Shape aShape = rShape.Moved(trsf * placement); // location in global space
-
-						// set variables for top face selection
-						TopoDS_Face topFace;
-						double lowHeight = 9999;
-
-						// loop through all faces of slab
-						TopExp_Explorer expl;
-						for (expl.Init(aShape, TopAbs_FACE); expl.More(); expl.Next())
-						{
-							TopoDS_Face face = TopoDS::Face(expl.Current());
-							// select floor top face
-							double faceHeight = face.Location().Transformation().TranslationPart().Z();
-
-
-							if (faceHeight < lowHeight) { lowHeight = faceHeight; }
-						}
-						height = lowHeight;
-						break;
-					}
-				}
+				double pHeight = objectPoints[i].Z();
+				if (pHeight < lowHeight) { lowHeight = pHeight; }
 			}
+			height = lowHeight;
 		}
-
 
 		if (height == -9999) { continue; } // TODO what hits this!
 
 		int maxidx = (int)pairedContainers.size();
 
-		// vind smallest distance to floor elevation
+		// find smallest distance to floor elevation
 		double smallestDistance = 1000;
 		int indxSmallestDistance = 0;
 		for (int i = 0; i < maxidx; i++) {
 			auto currentTuple = pairedContainers[i];
 			double distance = height * lengthMulti - std::get<0>(currentTuple);
 
-			if (distance < -0 * lengthMulti) { break; }
+			if (distance < -0.0001 * lengthMulti) { break; }
 
 			if (distance < smallestDistance)
 			{
@@ -799,7 +705,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 				indxSmallestDistance = i;
 			}
 
-			if (distance == 0) { break; }
+			if (distance > -0.0001 * lengthMulti && distance < 0.0001 * lengthMulti) { break; }
 		}
 
 		auto d = std::get<1>(pairedContainers[indxSmallestDistance])->RelatedElements();

@@ -1313,6 +1313,7 @@ void helper::voidShapeAdjust(T products)
 	for (auto it = products->begin(); it != products->end(); ++it) {
 		IfcSchema::IfcProduct* wallProduct = *it;
 		TopoDS_Shape untrimmedWallShape = getObjectShape(wallProduct, true);
+
 		TopExp_Explorer expl;
 
 		// get the voids
@@ -1459,7 +1460,6 @@ void helper::voidShapeAdjust(T products)
 			}
 			updateShapeLookup(wallProduct, finalShape, true);
 			updateIndex(wallProduct, finalShape);
-
 		}
 	}
 }
