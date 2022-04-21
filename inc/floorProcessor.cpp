@@ -692,7 +692,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 				if (pHeight < lowHeight) { lowHeight = pHeight; }
 				if (pHeight > topHeight) { topHeight = pHeight; }
 			}
-			height = (topHeight - lowHeight)/2 + lowHeight;
+			height = (topHeight - lowHeight)/3 + lowHeight;
 		}
 		else {
 			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(product, false, true);
