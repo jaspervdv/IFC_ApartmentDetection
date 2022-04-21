@@ -681,6 +681,19 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 			}
 			height = lowHeight;
 		}
+		else if (product->data().type()->name() == "IfcWall" || product->data().type()->name() == "IfcWallStandardCase") {
+			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(product, false, true);
+
+			double lowHeight = 9999;
+			double topHeight = -9999;
+			for (size_t i = 0; i < objectPoints.size(); i++)
+			{
+				double pHeight = objectPoints[i].Z();
+				if (pHeight < lowHeight) { lowHeight = pHeight; }
+				if (pHeight > topHeight) { topHeight = pHeight; }
+			}
+			height = (topHeight - lowHeight)/2 + lowHeight;
+		}
 		else {
 			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(product, false, true);
 

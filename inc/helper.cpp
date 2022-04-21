@@ -226,12 +226,22 @@ std::vector<IfcSchema::IfcProduct*> getNestedProducts(IfcSchema::IfcProduct* pro
 
 	if (!product->hasRepresentation())
 	{
+#ifdef USE_IFC4
 		IfcSchema::IfcRelAggregates::list::ptr decomposedProducts = product->IsDecomposedBy();
+#else
+		IfcSchema::IfcRelDecomposes::list::ptr decomposedProducts = product->IsDecomposedBy();
+#endif // USE_IFC4
 
 		if (decomposedProducts->size() == 0) { return {}; }
 
 		for (auto et = decomposedProducts->begin(); et != decomposedProducts->end(); ++et) {
+
+#ifdef USE_IFC4
 			IfcSchema::IfcRelAggregates* aggregates = *et;
+#else
+			IfcSchema::IfcRelDecomposes* aggregates = *et;
+#endif // USE_IFC4
+
 			IfcSchema::IfcObjectDefinition::list::ptr aggDef = aggregates->RelatedObjects();
 
 			for (auto rt = aggDef->begin(); rt != aggDef->end(); ++rt) {
@@ -1036,12 +1046,22 @@ std::vector<gp_Pnt> helper::getObjectPoints(IfcSchema::IfcProduct* product, bool
 
 		std::vector<IfcSchema::IfcProduct*> productList;
 
+#ifdef USE_IFC4
 		IfcSchema::IfcRelAggregates::list::ptr decomposedProducts = product->IsDecomposedBy();
+#else
+		IfcSchema::IfcRelDecomposes::list::ptr decomposedProducts = product->IsDecomposedBy();
+#endif // USE_IFC4
 
 		if (decomposedProducts->size() == 0) { return { gp_Pnt(0.0, 0.0, 0.0) }; }
 
 		for (auto et = decomposedProducts->begin(); et != decomposedProducts->end(); ++et) {
+
+#ifdef USE_IFC4
 			IfcSchema::IfcRelAggregates* aggregates = *et;
+#else
+			IfcSchema::IfcRelDecomposes* aggregates = *et;
+#endif // USE_IFC4
+
 			IfcSchema::IfcObjectDefinition::list::ptr aggDef = aggregates->RelatedObjects();
 
 			for (auto rt = aggDef->begin(); rt != aggDef->end(); ++rt) {
@@ -1141,12 +1161,22 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 
 	if (!product->hasRepresentation()) { 
 
+#ifdef USE_IFC4
 		IfcSchema::IfcRelAggregates::list::ptr decomposedProducts = product->IsDecomposedBy();
+#else
+		IfcSchema::IfcRelDecomposes::list::ptr decomposedProducts = product->IsDecomposedBy();
+#endif // USE_IFC4
 
 		if (decomposedProducts->size() == 0) { return { }; }
 
 		for (auto et = decomposedProducts->begin(); et != decomposedProducts->end(); ++et) {
+
+
+#ifdef USE_IFC4
 			IfcSchema::IfcRelAggregates* aggregates = *et;
+#else
+			IfcSchema::IfcRelDecomposes* aggregates = *et;
+#endif // USE_IFC4
 			IfcSchema::IfcObjectDefinition::list::ptr aggDef = aggregates->RelatedObjects();
 
 			for (auto rt = aggDef->begin(); rt != aggDef->end(); ++rt) {
