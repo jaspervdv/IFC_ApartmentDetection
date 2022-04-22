@@ -114,69 +114,72 @@ std::vector<TopoDS_Face> floorProcessor::getSlabFaces(std::vector<TopoDS_Shape> 
 	std::vector<TopoDS_Face> floorFaces;
 	for (size_t i = 0; i < shapes.size(); i++)
 	{
-		TopoDS_Shape floorshape = shapes[i];
-		TopExp_Explorer expl;
-
-
-		std::vector<TopoDS_Face> faceCollection;
-		std::vector<double> areaList;
-		double commulativeArea = 0;
-		int count = 0;
-
-
-		for (expl.Init(floorshape, TopAbs_FACE); expl.More(); expl.Next())
-		{
-			TopoDS_Face face = TopoDS::Face(expl.Current());
-			//get area of topface
-			GProp_GProps gprops;
-			BRepGProp::SurfaceProperties(face, gprops); // Stores results in gprops
-			commulativeArea += gprops.Mass();
-			areaList.emplace_back(gprops.Mass());
-			count++;
-
-		}
-		double minArea = commulativeArea / count;
-		count = 0;
-
-		for (expl.Init(floorshape, TopAbs_FACE); expl.More(); expl.Next())
-		{
-			if (areaList[count] > minArea)
-			{
-				faceCollection.emplace_back(TopoDS::Face(expl.Current()));
-			}
-			count++;
-		}
-
-		TopoDS_Face topFace;
-		double topScore = 0;
-		for (size_t j = 0; j < faceCollection.size(); j++)
-		{
-			double cummulativeH = 0;
-			int score = 0;
-			for (expl.Init(faceCollection[j], TopAbs_VERTEX); expl.More(); expl.Next())
-			{
-				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-				gp_Pnt p = BRep_Tool::Pnt(vertex);
-
-				cummulativeH += (p.Z() + 9999999);
-				score++;
-			}
-
-			if (cummulativeH/score > topScore)
-			{
-				topScore = cummulativeH / score;
-				topFace = faceCollection[j];
-			}
-		}
-
-		if (topScore != 0)
-		{
-			floorFaces.emplace_back(topFace);
-		}
-
+		floorFaces.emplace_back(getTopFace(shapes[i]));
 	}
 
 	return floorFaces;
+}
+
+TopoDS_Face floorProcessor::getTopFace(TopoDS_Shape shape)
+{
+
+	TopExp_Explorer expl;
+	std::vector<TopoDS_Face> faceCollection;
+	std::vector<double> areaList;
+	double commulativeArea = 0;
+	int count = 0;
+
+
+	for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next())
+	{
+		TopoDS_Face face = TopoDS::Face(expl.Current());
+		//get area of topface
+		GProp_GProps gprops;
+		BRepGProp::SurfaceProperties(face, gprops); // Stores results in gprops
+		commulativeArea += gprops.Mass();
+		areaList.emplace_back(gprops.Mass());
+		count++;
+
+	}
+	double minArea = commulativeArea / count;
+	count = 0;
+
+	for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next())
+	{
+		if (areaList[count] > minArea)
+		{
+			faceCollection.emplace_back(TopoDS::Face(expl.Current()));
+		}
+		count++;
+	}
+
+	TopoDS_Face topFace;
+	double topScore = 0;
+	for (size_t j = 0; j < faceCollection.size(); j++)
+	{
+		double cummulativeH = 0;
+		int score = 0;
+		for (expl.Init(faceCollection[j], TopAbs_VERTEX); expl.More(); expl.Next())
+		{
+			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+			gp_Pnt p = BRep_Tool::Pnt(vertex);
+
+			cummulativeH += (p.Z() + 9999999);
+			score++;
+		}
+
+		if (cummulativeH / score > topScore)
+		{
+			topScore = cummulativeH / score;
+			topFace = faceCollection[j];
+		}
+	}
+
+	if (topScore != 0)
+	{
+		return topFace;
+	}
+		return {};
 }
 
 std::vector<double> floorProcessor::getFaceAreas(std::vector<TopoDS_Face> faces) {
@@ -737,22 +740,10 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 		// floors are a special case due to them being placed based on their top face instead of basepoint
 		if (product->data().type()->name() == "IfcSlab" || product->data().type()->name() == "IfcRoof")
 		{
-			std::vector<TopoDS_Face> slabFaces = data->getObjectFaces(product, true);
+			TopoDS_Shape productShape =  data->getObjectShape(product, true);
+			TopoDS_Face topFace = getTopFace(productShape);
+			
 			TopExp_Explorer expl;
-			double tempHeight = -99999;
-			TopoDS_Face topFace;
-
-			for (size_t i = 0; i < slabFaces.size(); i++)
-			{
-				double z = slabFaces[i].Location().Transformation().TranslationPart().Z();
-
-				if (tempHeight < z)
-				{
-					tempHeight = z;
-					topFace = slabFaces[i];
-				}
-			}
-
 			double lowHeight = 9999;
 			for (expl.Init(topFace, TopAbs_VERTEX); expl.More(); expl.Next())
 			{

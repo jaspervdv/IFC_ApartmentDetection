@@ -79,6 +79,8 @@ private:
 	static std::vector<TopoDS_Face> getSlabFaces(helper* data);
 	static std::vector<TopoDS_Face> getSlabFaces(std::vector <TopoDS_Shape> shapes);
 
+	static TopoDS_Face getTopFace(TopoDS_Shape shape);
+
 	// returns a vector of the areas of the faces
 	static std::vector<double> getFaceAreas(std::vector<TopoDS_Face> faces);
 
