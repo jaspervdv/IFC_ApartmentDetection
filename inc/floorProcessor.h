@@ -94,7 +94,7 @@ public:
 
 	static bool compareElevations(std::vector<double> elevations, std::vector<double> floors);
 
-	static void processStoreys(std::vector<helper*> data, std::vector<double> elevations);
+	static void processStoreys(std::vector<helper*> data, std::vector<double> elevations, bool useOriginal);
 
 	// removes all the storey data from the file
 	static void cleanStoreys(helper* data);
@@ -103,6 +103,7 @@ public:
 	static void createStoreys(helper* data, std::vector<double> floorStoreys);
 
 	static void sortObjects(helper* data);
+	static void sortObjects(helper* data, IfcSchema::IfcBuildingStorey::list::ptr storeys);
 	static void sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr products);
 
 	// TODO make private

@@ -48,15 +48,16 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/BIM_Projekt_Golden_Nugget-Architektur_und_Ingenieurbau.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/SampleProject_Villa_2_7_animatedTrees.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte 2.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/RAC_basic_sample_project_ifc4.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_ARC_DigitalHub.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/RAC_basic_sample_project_ifc4.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_ARC_DigitalHub.ifc",
+	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_LFT_DigitalHub.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
-	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
-	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
 	};
 
 	return sourcePathArray;
@@ -203,6 +204,8 @@ int main(int argc, char** argv) {
 
 	// allow user to select which elevations are used
 	std::vector<double> usedElevations = StoredFloorElevation;
+	bool originalStoreys = true;
+
 	if (!floorProcessor::compareElevations(StoredFloorElevation, floorElevation))
 	{
 		std::cout << "[INFO] Software detected different storey elevations than are stored in the IFC file \n" << std::endl;
@@ -210,13 +213,16 @@ int main(int argc, char** argv) {
 		compareElevationsOutput(StoredFloorElevation, floorElevation);
 		std::cout << "\nUse the recalculated Storey elevations? (Y/N): ";
 
-		if (yesNoQuestion()) { usedElevations = floorElevation; }
+		if (yesNoQuestion()) {
+			usedElevations = floorElevation;
+			originalStoreys = false;
+		}
 	}
 	else {
 		std::cout << "[INFO] Software detected identical storey elevations as are stored in the IFC file" << std::endl;
 	}
 
-	if (usedElevations == StoredFloorElevation)
+	if (originalStoreys)
 	{
 		std::cout << "\nContinue with sorting process?\nQuality of the results may vary\n(Y/N): ";
 
@@ -224,13 +230,13 @@ int main(int argc, char** argv) {
 		{ 
 			// create new storeys and sort all object into them
 			std::cout << std::endl; 
-			floorProcessor::processStoreys(hCluster->getHelpers(), usedElevations);
+			floorProcessor::processStoreys(hCluster->getHelpers(), usedElevations, true);
 		}
 
 	}
 	else {
 		std::cout << std::endl;
-		floorProcessor::processStoreys(hCluster->getHelpers(), usedElevations);
+		floorProcessor::processStoreys(hCluster->getHelpers(), usedElevations, false);
 	}
 
 	std::cout << std::endl;

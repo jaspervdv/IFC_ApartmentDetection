@@ -1254,7 +1254,19 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 
 		if (ifc_representation->RepresentationIdentifier() == "Annotation")
 		{
+			
+			gp_Trsf placement;
 			gp_Trsf trsf;
+
+			settings.set(settings.INCLUDE_CURVES, true);
+
+			kernel_->convert_placement(product->ObjectPlacement(), trsf);
+			IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
+			kernel_->convert_placement(ifc_representation, placement);
+			//comp = brep->geometry().as_compound();
+
+
+			/*gp_Trsf trsf;
 			kernel_->convert_placement(product->ObjectPlacement(), trsf);
 
 			IfcSchema::IfcRepresentationItem::list::ptr representationItems = ifc_representation->Items();
@@ -1267,7 +1279,7 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 				
 			}
 
-
+			*/
 			//std::cout << representationItems->data().toString() << std::endl;
 
 			// data is never deleted, can be used later as internalized data

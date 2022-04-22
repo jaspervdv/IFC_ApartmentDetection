@@ -115,35 +115,67 @@ std::vector<TopoDS_Face> floorProcessor::getSlabFaces(std::vector<TopoDS_Shape> 
 	for (size_t i = 0; i < shapes.size(); i++)
 	{
 		TopoDS_Shape floorshape = shapes[i];
-
-		// set variables for top face selection
-		TopoDS_Face topFace;
-		double topHeight = -9999;
-
-		// loop through all faces of slab
 		TopExp_Explorer expl;
+
+
+		std::vector<TopoDS_Face> faceCollection;
+		std::vector<double> areaList;
+		double commulativeArea = 0;
+		int count = 0;
+
+
 		for (expl.Init(floorshape, TopAbs_FACE); expl.More(); expl.Next())
 		{
 			TopoDS_Face face = TopoDS::Face(expl.Current());
-			BRepAdaptor_Surface brepAdaptorSurface(face, Standard_True);
+			//get area of topface
+			GProp_GProps gprops;
+			BRepGProp::SurfaceProperties(face, gprops); // Stores results in gprops
+			commulativeArea += gprops.Mass();
+			areaList.emplace_back(gprops.Mass());
+			count++;
 
+		}
+		double minArea = commulativeArea / count;
+		count = 0;
 
-			// select floor top face
-			double faceHeight = face.Location().Transformation().TranslationPart().Z();
-
-			if (faceHeight > topHeight)
+		for (expl.Init(floorshape, TopAbs_FACE); expl.More(); expl.Next())
+		{
+			if (areaList[count] > minArea)
 			{
-				topFace = face;
-				topHeight = faceHeight;
+				faceCollection.emplace_back(TopoDS::Face(expl.Current()));
+			}
+			count++;
+		}
+
+		TopoDS_Face topFace;
+		double topScore = 0;
+		for (size_t j = 0; j < faceCollection.size(); j++)
+		{
+			double cummulativeH = 0;
+			int score = 0;
+			for (expl.Init(faceCollection[j], TopAbs_VERTEX); expl.More(); expl.Next())
+			{
+				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+				gp_Pnt p = BRep_Tool::Pnt(vertex);
+
+				cummulativeH += (p.Z() + 9999999);
+				score++;
+			}
+
+			if (cummulativeH/score > topScore)
+			{
+				topScore = cummulativeH / score;
+				topFace = faceCollection[j];
 			}
 		}
 
-		if (topHeight != -9999)
+		if (topScore != 0)
 		{
 			floorFaces.emplace_back(topFace);
 		}
 
 	}
+
 	return floorFaces;
 }
 
@@ -245,13 +277,14 @@ std::vector<double> floorProcessor::computeFloorElevations(helper* data)
 	// make floor struct
 	std::vector<double> faceAreas = floorProcessor::getFaceAreas(floorFaces);
 
-	auto SmallestAllowedArea = getMedian(faceAreas) * 0.1;
+	auto SmallestAllowedArea = 10 / data->getAreaMultiplier();
 
 	std::vector<FloorStruct> floorList;
 	for (size_t i = 0; i < floorFaces.size(); i++)
 	{
+
 		// filter out small floor slabs
-		//if (faceAreas[i] > SmallestAllowedArea)
+		if (faceAreas[i] > SmallestAllowedArea)
 		{
 			floorProcessor::FloorStruct floorobject(floorFaces[i], faceAreas[i]);
 			floorList.emplace_back(floorobject);
@@ -507,22 +540,53 @@ bool floorProcessor::compareElevations(std::vector<double> elevations, std::vect
 	}
 }
 
-void floorProcessor::processStoreys(std::vector<helper*> data, std::vector<double> elevations)
+void floorProcessor::processStoreys(std::vector<helper*> data, std::vector<double> elevations, bool useOriginal)
 {
-	for (size_t i = 0; i < data.size(); i++)
+	if (!useOriginal)
 	{
-		// wipe storeys
-		floorProcessor::cleanStoreys(data[i]);
-		// create new storeys
-		floorProcessor::createStoreys(data[i], elevations);
+		for (size_t i = 0; i < data.size(); i++)
+		{
+			// wipe storeys
+			floorProcessor::cleanStoreys(data[i]);
+			// create new storeys
+			floorProcessor::createStoreys(data[i], elevations);
 
-		// match objects to new storeys
-		floorProcessor::sortObjects(data[i]);
+			// match objects to new storeys
+			floorProcessor::sortObjects(data[i]);
+		}
 	}
+	else if (useOriginal)
+	{
+		// get the desirable storeys 
+		IfcSchema::IfcBuildingStorey::list::ptr storeys = 0;
+
+
+		for (size_t i = 0; i < data.size(); i++)
+		{
+			if (data[i]->getIsConstruct())
+			{
+				storeys = data[i]->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
+				floorProcessor::sortObjects(data[i]);
+			}
+			else
+			{
+				floorProcessor::cleanStoreys(data[i]);
+			}
+		}
+		for (size_t i = 0; i < data.size(); i++)
+		{
+			if (!data[i]->getIsConstruct())
+			{
+				floorProcessor::sortObjects(data[i], storeys);
+			}
+		}
+	}
+
 }
 
 void floorProcessor::cleanStoreys(helper* data)
 {
+
 	// remove the storey object
 	IfcSchema::IfcBuildingStorey::list::ptr oldStoreys = data->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
 
@@ -563,16 +627,33 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 	auto targetFile = data->getSourceFile();
 	IfcHierarchyHelper<IfcSchema> hierarchyHelper;
 
+	// find the presumed ground floor
+	double smallestDistance = 1000;
+	int groundfloor = 0;
 	for (size_t i = 0; i < floorStoreys.size(); i++)
+	{
+		double distance = abs(floorStoreys[i]);
+
+		if (distance < smallestDistance)
+		{
+			smallestDistance = distance;
+			groundfloor = i;
+		}
+	}
+
+
+	for (int i = 0; i < floorStoreys.size(); i++)
 	{
 		// create storey objects
 		auto storey = hierarchyHelper.addBuildingStorey(building, ownerHistory);
 		storey->setElevation(floorStoreys[i]);
-		storey->setName("Floor");
+		if (i == groundfloor) { storey->setName("Ground Floor"); }
+		else { storey->setName("Floor " + std::to_string(i - groundfloor)); }
 		storey->setDescription("Automatically generated floor");
 
 		// placement
-		storey->setObjectPlacement(hierarchyHelper.addLocalPlacement(buildingLoc, 0, 0, floorStoreys[i]));
+		double lengthMulti = data->getUnits()[0];
+		storey->setObjectPlacement(hierarchyHelper.addLocalPlacement(buildingLoc, 0, 0, floorStoreys[i] ) );
 		IfcSchema::IfcProduct::list::ptr parts(new IfcSchema::IfcProduct::list);
 
 		// make container object
@@ -681,7 +762,11 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 			}
 			height = lowHeight;
 		}
-		else if (product->data().type()->name() == "IfcWall" || product->data().type()->name() == "IfcWallStandardCase") {
+		else if (product->data().type()->name() == "IfcWall" || 
+				 product->data().type()->name() == "IfcWallStandardCase" ||
+				 product->data().type()->name() == "IfcStair"
+
+			) {
 			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(product, false, true);
 
 			double lowHeight = 9999;
@@ -736,6 +821,65 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 		d.get()->push(product);
 		std::get<1>(pairedContainers[indxSmallestDistance])->setRelatedElements(d);
 	}
+
+}
+
+void floorProcessor::sortObjects(helper* data, IfcSchema::IfcBuildingStorey::list::ptr storeys)
+{
+	auto targetFile = data->getSourceFile();
+	IfcSchema::IfcBuilding* building;
+	IfcSchema::IfcOwnerHistory* ownerHistory = data->getHistory();
+	IfcHierarchyHelper<IfcSchema> hierarchyHelper;
+	IfcSchema::IfcBuilding::list::ptr buildings = data->getSourceFile()->instances_by_type<IfcSchema::IfcBuilding>();
+	if (buildings.get()->size() != 1)
+	{
+		std::cout << "[Error] multiple building objects found!" << std::endl;
+		return;
+	}
+
+	building = *buildings.get()->begin();
+	IfcSchema::IfcObjectPlacement* buildingLoc = building->ObjectPlacement();
+
+	for (auto it = storeys->begin(); it != storeys->end(); ++it)
+	{
+		auto originalStorey = *it;
+		auto storey = hierarchyHelper.addBuildingStorey(building, ownerHistory);
+
+		storey->setElevation(originalStorey->Elevation());
+
+		if (originalStorey->hasName()) { storey->setName(originalStorey->Name()); }
+		if (originalStorey->hasDescription()) { storey->setDescription(originalStorey->Description() + " Automatically named storey"); }
+		if (originalStorey->hasLongName()) { storey->setLongName(originalStorey->LongName()); }
+		if (originalStorey->hasObjectPlacement())
+		storey->setObjectPlacement(hierarchyHelper.addLocalPlacement(buildingLoc, 0, 0, originalStorey->Elevation()));
+
+		IfcSchema::IfcProduct::list::ptr parts(new IfcSchema::IfcProduct::list);
+		IfcSchema::IfcRelContainedInSpatialStructure* container = new IfcSchema::IfcRelContainedInSpatialStructure(
+			IfcParse::IfcGlobalId(),		// GlobalId
+			0,								// OwnerHistory
+			std::string(""),				// Name
+			boost::none,					// Description
+			parts,							// Related Elements
+			storey							// Related structure
+		);
+		hierarchyHelper.addEntity(container);
+	}
+
+
+	for (auto it = hierarchyHelper.begin(); it != hierarchyHelper.end(); ++it)
+	{
+		auto hierarchyElement = *it;
+		auto hierarchyDataElement = hierarchyElement.second;
+		auto objectName = hierarchyDataElement->declaration().name();
+
+		// remove potential dublications made by the helper
+		// TODO remove all dependencies of building and owners as well
+		if (objectName == "IfcBuilding" || objectName == "IfcOwnerHistory") { continue; }
+
+		targetFile->addEntity(hierarchyDataElement);
+	}
+
+	sortObjects(data);
 
 }
 
