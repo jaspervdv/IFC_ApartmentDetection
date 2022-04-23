@@ -720,22 +720,14 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 	{
 		IfcSchema::IfcProduct* product = *it;
 
-		if (!product->hasRepresentation()) {
+		if (product->data().type()->name() == "IfcSite" || 
+			product->data().type()->name() == "IfcBuilding" ||
+			product->data().type()->name() == "IfcBuildingStorey") {
 			continue;
 		}
-		if (product->data().type()->name() == "IfcSite") { continue; }
 
 		bool heightFound = false;
-
-		auto representations = product->Representation()->Representations();
-
-		gp_Trsf trsf;
-		if (product->hasObjectPlacement()) { kernel->convert_placement(product->ObjectPlacement(), trsf); }
-		else { 
-		}
 		double height = -9999;
-
-		bool hasBBox = false;
 
 		// floors are a special case due to them being placed based on their top face instead of basepoint
 		if (product->data().type()->name() == "IfcSlab" || product->data().type()->name() == "IfcRoof")
@@ -757,8 +749,10 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 				 product->data().type()->name() == "IfcWallStandardCase" ||
 				 product->data().type()->name() == "IfcStair"
 
-			) {
-			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(product, false, true);
+			) 
+		{
+			TopoDS_Shape productShape = data->getObjectShape(product, true);
+			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(productShape, false);
 
 			double lowHeight = 9999;
 			double topHeight = -9999;
@@ -770,11 +764,15 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 			}
 			height = (topHeight - lowHeight)/3 + lowHeight;
 		}
-		else {
-			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(product, false, true);
+		else 
+		{
+			TopoDS_Shape productShape = data->getObjectShape(product, true);
+			std::vector<gp_Pnt> objectPoints = data->getObjectPoints(productShape, false);
 
-			//std::cout << product->data().toString() << std::endl;
-			//std::cout << objectPoints.size() << std::endl;
+			if (objectPoints.size() == 0)
+			{
+				continue;
+			}
 
 			double lowHeight = 9999;
 			for (size_t i = 0; i < objectPoints.size(); i++)
@@ -783,10 +781,11 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 				if (pHeight < lowHeight) { lowHeight = pHeight; }
 			}
 			height = lowHeight;
-			//std::cout << lowHeight << std::endl;
 		}
 
-		if (height == -9999) { continue; } // TODO what hits this!
+		if (height == -9999) { 
+			continue; 
+		} // TODO what hits this!
 
 		int maxidx = (int)pairedContainers.size();
 

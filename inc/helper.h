@@ -1,4 +1,4 @@
-//#define USE_IFC4
+#define USE_IFC4
 
 #ifdef USE_IFC4
 #define IfcSchema Ifc4
@@ -251,6 +251,7 @@ public:
 	auto getRoomCenters() { return roomCenterPoints_; }
 
 	std::vector<gp_Pnt> getObjectPoints(IfcSchema::IfcProduct* product, bool sortEdges = false, bool simple = false);
+	std::vector<gp_Pnt> getObjectPoints(TopoDS_Shape shape, bool sortEdges = false);
 
 	std::vector<TopoDS_Face> getObjectFaces(IfcSchema::IfcProduct* product, bool simple = false);
 

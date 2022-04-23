@@ -1110,6 +1110,30 @@ std::vector<gp_Pnt> helper::getObjectPoints(IfcSchema::IfcProduct* product, bool
 
 }
 
+std::vector<gp_Pnt> helper::getObjectPoints(TopoDS_Shape shape, bool sortEdges)
+{
+	std::vector<gp_Pnt> pointList;
+
+	TopExp_Explorer expl;
+	for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
+	{
+		TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+		gp_Pnt p = BRep_Tool::Pnt(vertex);
+		pointList.emplace_back(p);
+	}
+
+	if (!sortEdges) { return pointList; }
+
+	std::vector<gp_Pnt> pointListSmall;
+	for (size_t i = 0; i < pointList.size(); i++)
+	{
+		if (i % 2 == 0) { pointListSmall.emplace_back(pointList[i]); }
+	}
+
+	return pointListSmall;
+}
+
+
 std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product, bool simple)
 {
 	std::vector<TopoDS_Face> faceList;
@@ -1132,7 +1156,7 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 {
 	// filter with lookup
 	if (product->data().type()->name() != "IfcWall" &&
-		product->data().type()->name() != "IfcWallStandardCase" && 
+		product->data().type()->name() != "IfcWallStandardCase" &&
 		product->data().type()->name() != "IfcRoof")
 	{
 		adjusted = false;
@@ -1156,10 +1180,7 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 		}
 	}
 
-	// find representations
-	std::vector<IfcSchema::IfcProduct*> productList;
-
-	if (!product->hasRepresentation()) { 
+	if (!product->hasRepresentation()) {
 
 #ifdef USE_IFC4
 		IfcSchema::IfcRelAggregates::list::ptr decomposedProducts = product->IsDecomposedBy();
@@ -1168,6 +1189,10 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 #endif // USE_IFC4
 
 		if (decomposedProducts->size() == 0) { return { }; }
+
+		BRep_Builder builder;
+		TopoDS_Compound collection;
+		builder.MakeCompound(collection);
 
 		for (auto et = decomposedProducts->begin(); et != decomposedProducts->end(); ++et) {
 
@@ -1184,152 +1209,137 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 
 				IfcSchema::IfcProduct* addprod = aggDef->as<IfcSchema::IfcProduct>();
 
-				if (addprod->hasRepresentation())
-				{
-					productList.emplace_back(addprod);
-				}
-
-				
+				TopoDS_Shape addshape = getObjectShape(addprod);
+				builder.Add(collection, addshape);
 			}
 		}
-		return {}; 
-	}
-	else {
-		productList.emplace_back(product);
+		return collection;
 	}
 
 	int id = product->data().id();
-	
-	BRep_Builder builder;
-	TopoDS_Compound collection;
-	TopoDS_Compound simpleCollection;
-	builder.MakeCompound(collection);
-	builder.MakeCompound(simpleCollection);
 
 	bool hasHoles = false;
 	bool isFloor = false;
 
 	if (product->data().type()->name() == "IfcWall" ||
 		product->data().type()->name() == "IfcWallStandardCase" ||
-		product->data().type()->name() == "IfcRoof" ) { hasHoles = true; }
+		product->data().type()->name() == "IfcRoof") {
+		hasHoles = true;
+	}
 	if (product->data().type()->name() == "IfcSlab") { isFloor = true; }
 
-	for (size_t i = 0; i < productList.size(); i++)
+
+	TopoDS_Compound comp;
+	TopoDS_Compound simpleComp;
+
+	IfcSchema::IfcRepresentation* ifc_representation = 0;
+
+	IfcSchema::IfcProductRepresentation* prodrep = product->Representation();
+	IfcSchema::IfcRepresentation::list::ptr reps = prodrep->Representations();
+
+	for (IfcSchema::IfcRepresentation::list::it it = reps->begin(); it != reps->end(); ++it) {
+		IfcSchema::IfcRepresentation* rep = *it;
+		if (rep->RepresentationIdentifier() == "Body") {
+			ifc_representation = rep;
+			break;
+		}
+	}
+
+	if (ifc_representation == 0)
 	{
-		TopoDS_Compound comp;
-
-		IfcSchema::IfcRepresentation* ifc_representation = 0;
-
-		IfcSchema::IfcProductRepresentation* prodrep = product->Representation();
-		IfcSchema::IfcRepresentation::list::ptr reps = prodrep->Representations();
-
 		for (IfcSchema::IfcRepresentation::list::it it = reps->begin(); it != reps->end(); ++it) {
 			IfcSchema::IfcRepresentation* rep = *it;
-			if (rep->RepresentationIdentifier() == "Body") {
+
+			if (rep->RepresentationIdentifier() == "Annotation") {
 				ifc_representation = rep;
 				break;
 			}
 		}
+	}
 
-		if (ifc_representation == 0)
+
+	IfcGeom::IteratorSettings settings;
+	if (isFloor) { settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true); }
+
+	if (!ifc_representation)
+	{
+		return {};
+	}
+
+	if (ifc_representation->RepresentationIdentifier() == "Annotation")
+	{
+
+		gp_Trsf placement;
+		gp_Trsf trsf;
+
+		settings.set(settings.INCLUDE_CURVES, true);
+
+		kernel_->convert_placement(product->ObjectPlacement(), trsf);
+		IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
+		kernel_->convert_placement(ifc_representation, placement);
+		//comp = brep->geometry().as_compound();
+
+
+		/*gp_Trsf trsf;
+		kernel_->convert_placement(product->ObjectPlacement(), trsf);
+
+		IfcSchema::IfcRepresentationItem::list::ptr representationItems = ifc_representation->Items();
+
+		for (auto it = representationItems->begin(); it != representationItems->end(); ++it)
 		{
-			for (IfcSchema::IfcRepresentation::list::it it = reps->begin(); it != reps->end(); ++it) {
-				IfcSchema::IfcRepresentation* rep = *it;
+			IfcSchema::IfcRepresentationItem* representationItem = *it;
 
-				if (rep->RepresentationIdentifier() == "Annotation") {
-					ifc_representation = rep;
-					break;
-				}
-			}
+			if (representationItem->data().type()->name() == "IfcTextLiteralWithExtent") { continue; }
+
 		}
 
+		*/
+		//std::cout << representationItems->data().toString() << std::endl;
 
-		IfcGeom::IteratorSettings settings;
-		if (isFloor) { settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true); }
+		// data is never deleted, can be used later as internalized data
+		//IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
 
-		if (!ifc_representation)
+
+
+	}
+	else if (ifc_representation->RepresentationIdentifier() == "Body")
+	{
+		gp_Trsf placement;
+		gp_Trsf trsf;
+
+		kernel_->convert_placement(product->ObjectPlacement(), trsf);
+		IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
+		kernel_->convert_placement(ifc_representation, placement);
+
+		comp = brep->geometry().as_compound();
+		comp.Move(trsf * placement); // location in global space
+
+
+		if (hasHoles)
 		{
-			return {};
-		}
-
-		if (ifc_representation->RepresentationIdentifier() == "Annotation")
-		{
-			
-			gp_Trsf placement;
-			gp_Trsf trsf;
-
-			settings.set(settings.INCLUDE_CURVES, true);
-
-			kernel_->convert_placement(product->ObjectPlacement(), trsf);
-			IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
+			settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true);
+			brep = kernel_->convert(settings, ifc_representation, product);
 			kernel_->convert_placement(ifc_representation, placement);
-			//comp = brep->geometry().as_compound();
 
-
-			/*gp_Trsf trsf;
-			kernel_->convert_placement(product->ObjectPlacement(), trsf);
-
-			IfcSchema::IfcRepresentationItem::list::ptr representationItems = ifc_representation->Items();
-
-			for (auto it = representationItems->begin(); it != representationItems->end(); ++it)
-			{
-				IfcSchema::IfcRepresentationItem* representationItem = *it;
-
-				if (representationItem->data().type()->name() == "IfcTextLiteralWithExtent") { continue; }				
-				
-			}
-
-			*/
-			//std::cout << representationItems->data().toString() << std::endl;
-
-			// data is never deleted, can be used later as internalized data
-			//IfcGeom::IfcRepresentationShapeItems ob(kernel_->convert(representationItems));
-
-
-
-		}
-		else if (ifc_representation->RepresentationIdentifier() == "Body")
-		{
-			gp_Trsf placement;
-			gp_Trsf trsf;
-
-			kernel_->convert_placement(product->ObjectPlacement(), trsf);
-			IfcGeom::BRepElement<double, double>* brep = kernel_->convert(settings, ifc_representation, product);
-			kernel_->convert_placement(ifc_representation, placement);
-
-			comp = brep->geometry().as_compound();
-			comp.Move(trsf* placement); // location in global space
-
-			builder.Add(collection, comp);
-
-			if (hasHoles)
-			{
-				settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, true);
-				brep = kernel_->convert(settings, ifc_representation, product);
-				kernel_->convert_placement(ifc_representation, placement);
-
-				comp = brep->geometry().as_compound();
-				comp.Move(trsf * placement); // location in global space
-
-				builder.Add(simpleCollection, comp);
-			}
+			simpleComp = brep->geometry().as_compound();
+			simpleComp.Move(trsf * placement); // location in global space
 		}
 	}
 
-	shapeLookup_[product->data().id()] = collection;
+	shapeLookup_[product->data().id()] = comp;
 
 	if (hasHoles)
 	{
-		adjustedshapeLookup_[product->data().id()] = simpleCollection;
+		adjustedshapeLookup_[product->data().id()] = simpleComp;
 		
 	}
 
 	if (adjusted)
 	{
-		return simpleCollection;
+		return simpleComp;
 	}
 	
-	return collection;
+	return comp;
 }
 
 void helper::updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shape, bool adjusted)
