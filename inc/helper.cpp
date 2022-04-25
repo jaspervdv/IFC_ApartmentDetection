@@ -1195,8 +1195,6 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 		builder.MakeCompound(collection);
 
 		for (auto et = decomposedProducts->begin(); et != decomposedProducts->end(); ++et) {
-
-
 #ifdef USE_IFC4
 			IfcSchema::IfcRelAggregates* aggregates = *et;
 #else

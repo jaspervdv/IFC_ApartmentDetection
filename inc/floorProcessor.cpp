@@ -647,15 +647,16 @@ void floorProcessor::createStoreys(helper* data, std::vector<double> floorStorey
 
 	for (int i = 0; i < floorStoreys.size(); i++)
 	{
+		double lengthMulti = data->getUnits()[0];
+
 		// create storey objects
 		auto storey = hierarchyHelper.addBuildingStorey(building, ownerHistory);
-		storey->setElevation(floorStoreys[i]);
+		storey->setElevation(floorStoreys[i]/lengthMulti);
 		if (i == groundfloor) { storey->setName("Ground Floor"); }
 		else { storey->setName("Floor " + std::to_string(i - groundfloor)); }
 		storey->setDescription("Automatically generated floor");
 
 		// placement
-		double lengthMulti = data->getUnits()[0];
 		storey->setObjectPlacement(hierarchyHelper.addLocalPlacement(buildingLoc, 0, 0, floorStoreys[i] ) );
 		IfcSchema::IfcProduct::list::ptr parts(new IfcSchema::IfcProduct::list);
 
@@ -783,7 +784,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 			height = lowHeight;
 		}
 
-		if (height == -9999) { 
+		if (height == -9999 || height == 9999) {
 			continue; 
 		} // TODO what hits this!
 
@@ -794,7 +795,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 		int indxSmallestDistance = 0;
 		for (int i = 0; i < maxidx; i++) {
 			auto currentTuple = pairedContainers[i];
-			double distance = height * lengthMulti - std::get<0>(currentTuple);
+			double distance = height - std::get<0>(currentTuple);
 
 			if (distance < -0.0001 * lengthMulti) { break; }
 
