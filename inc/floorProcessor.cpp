@@ -717,6 +717,8 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 	}
 	std::sort(pairedContainers.begin(), pairedContainers.end());
 
+	double topBuffer = 0.2;
+
 	for (auto it = products->begin(); it != products->end(); ++it)
 	{
 		IfcSchema::IfcProduct* product = *it;
@@ -748,7 +750,8 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 		}
 		else if (product->data().type()->name() == "IfcWall" || 
 				 product->data().type()->name() == "IfcWallStandardCase" ||
-				 product->data().type()->name() == "IfcStair"
+				 product->data().type()->name() == "IfcStair" ||
+				 product->data().type()->name() == "IfcStairFlight" 
 
 			) 
 		{
@@ -776,12 +779,28 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 			}
 
 			double lowHeight = 9999;
+			double topheight = -9999;
 			for (size_t i = 0; i < objectPoints.size(); i++)
 			{
 				double pHeight = objectPoints[i].Z();
 				if (pHeight < lowHeight) { lowHeight = pHeight; }
+				if (pHeight > topheight) { topheight = pHeight; }
 			}
-			height = lowHeight;
+			
+			if ((topheight - lowHeight)/5 > topBuffer)
+			{
+				height = lowHeight + topBuffer;
+			}
+			else
+			{
+				height = lowHeight;
+			}
+
+			if (product->data().id() == 10407707)
+			{
+				std::cout << height << std::endl;
+			}
+
 		}
 
 		if (height == -9999 || height == 9999) {
