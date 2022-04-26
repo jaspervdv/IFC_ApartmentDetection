@@ -589,6 +589,16 @@ void floorProcessor::processStoreys(std::vector<helper*> data, std::vector<doubl
 
 void floorProcessor::cleanStoreys(helper* data)
 {
+	// remove the storey container
+	IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = data->getSourceFile()->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
+
+	for (IfcSchema::IfcRelContainedInSpatialStructure::list::it it = containers->begin(); it != containers->end(); ++it)
+	{
+		IfcSchema::IfcRelContainedInSpatialStructure* container = *it;
+		if (container->RelatingStructure()->data().type()->name() != "IfcBuildingStorey") { continue; }
+		data->getSourceFile()->removeEntity(container);
+	}
+
 
 	// remove the storey object
 	IfcSchema::IfcBuildingStorey::list::ptr oldStoreys = data->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
@@ -597,15 +607,6 @@ void floorProcessor::cleanStoreys(helper* data)
 	{
 		IfcSchema::IfcBuildingStorey* storey = *it;
 		data->getSourceFile()->removeEntity(storey);
-	}
-
-	// remove the storey container
-	IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = data->getSourceFile()->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
-
-	for (IfcSchema::IfcRelContainedInSpatialStructure::list::it it = containers->begin(); it != containers->end(); ++it)
-	{
-		IfcSchema::IfcRelContainedInSpatialStructure* container = *it;
-		data->getSourceFile()->removeEntity(container);
 	}
 
 }
@@ -701,10 +702,8 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 	{
 		IfcSchema::IfcRelContainedInSpatialStructure* structure = *it;
 
-		if (structure->data().getArgument(5)->toString().size() < 2)
-		{
-			continue;
-		}
+		if (structure->RelatingStructure()->data().type()->name() != "IfcBuildingStorey") { continue; }
+		//if (structure->data().getArgument(5)->toString().size() < 2) { continue; }
 
 		double height = std::stod(structure->RelatingStructure()->data().getArgument(9)->toString()) * lengthMulti;
 
