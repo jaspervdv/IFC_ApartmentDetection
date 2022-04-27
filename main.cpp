@@ -42,7 +42,7 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/simple_rooms.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/curtainWall_1.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/wall_curtain_1.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/RoomInRoom.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/RoomInRoom2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/covex_concave.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/rotatedRoomTest.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/BIM_Projekt_Golden_Nugget-Architektur_und_Ingenieurbau.ifc"
@@ -53,13 +53,13 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_HZG_DigitalHub.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_LFT_DigitalHub.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_SAN_DigitalHub.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
-	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
-	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
+	"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
 	};
 
 	return sourcePathArray;
@@ -297,6 +297,35 @@ int main(int argc, char** argv) {
 		std::cout << "computing time = " << std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count() << std::endl;
 
 		field->writeGraph(graphPath + "_graph.txt");
+
+	}
+	else { // if no new room creation
+
+		bool hasComplex = false;
+
+		std::cout << std::endl;
+		std::cout << "Reconstruct complex roomobjects present in the original model?? (Y/N): ";
+		if (yesNoQuestion())
+		{
+
+			for (int i = 0; i < hCluster->getSize(); i++)
+			{
+				hasComplex = true;
+				hCluster->getHelper(i)->correctRooms();
+			}
+
+		}
+		std::cout << std::endl;
+		std::cout << "Construct Graph data? (Y/N): ";
+		if (yesNoQuestion())
+		{
+			for (int i = 0; i < hCluster->getSize(); i++)
+			{
+				// TODO create seperate graph creation process
+			}
+
+		}
+		std::cout << std::endl;
 	}
 
 

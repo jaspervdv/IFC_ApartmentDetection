@@ -1,4 +1,4 @@
-#define USE_IFC4
+//#define USE_IFC4
 
 #ifdef USE_IFC4
 #define IfcSchema Ifc4
@@ -140,6 +140,10 @@ private:
 	std::vector<roomLookupValue> roomLookup_;
 	std::vector<gp_Pnt> roomCenterPoints_;
 
+	bool hasIndex_ = false;
+	bool hasCIndex_ = false;
+	bool hasRIndex_ = false;
+
 	std::map < int, TopoDS_Shape > shapeLookup_;
 	std::map < int, TopoDS_Shape > adjustedshapeLookup_;
 
@@ -188,6 +192,7 @@ public:
 
 	// makes a spatial index for the geometry
 	void indexGeo();
+	void indexRooms();
 
 	// corrects room classification
 	void correctRooms();

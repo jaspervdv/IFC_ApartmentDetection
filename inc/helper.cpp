@@ -512,45 +512,72 @@ void helper::indexGeo()
 	// this indexing is done based on the rotated bboxes of the objects
 	// the bbox does thus comply with the model bbox but not with the actual objects original location
 
-	// add the floorslabs to the rtree
-	addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
-	addObjectToIndex<IfcSchema::IfcRoof::list::ptr>(file_->instances_by_type<IfcSchema::IfcRoof>());
+	if (!hasIndex_)
+	{
+		// add the floorslabs to the rtree
+		addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
+		addObjectToIndex<IfcSchema::IfcRoof::list::ptr>(file_->instances_by_type<IfcSchema::IfcRoof>());
 
-	// add the walls to the rtree
-	addObjectToIndex<IfcSchema::IfcWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcWall>());
-	addObjectToIndex<IfcSchema::IfcCovering::list::ptr>(file_->instances_by_type<IfcSchema::IfcCovering>());
+		// add the walls to the rtree
+		addObjectToIndex<IfcSchema::IfcWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcWall>());
+		addObjectToIndex<IfcSchema::IfcCovering::list::ptr>(file_->instances_by_type<IfcSchema::IfcCovering>());
 
-	// add the columns to the rtree TODO sweeps
-	addObjectToIndex<IfcSchema::IfcColumn::list::ptr>(file_->instances_by_type<IfcSchema::IfcColumn>());
+		// add the columns to the rtree TODO sweeps
+		addObjectToIndex<IfcSchema::IfcColumn::list::ptr>(file_->instances_by_type<IfcSchema::IfcColumn>());
 
-	// add the beams to the rtree
-	addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());
+		// add the beams to the rtree
+		addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());
 
-	// add the curtain walls to the rtree
-	addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
-	addObjectToIndex<IfcSchema::IfcPlate::list::ptr>(file_->instances_by_type<IfcSchema::IfcPlate>());
-	addObjectToIndex<IfcSchema::IfcMember::list::ptr>(file_->instances_by_type<IfcSchema::IfcMember>());
+		// add the curtain walls to the rtree
+		addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
+		addObjectToIndex<IfcSchema::IfcPlate::list::ptr>(file_->instances_by_type<IfcSchema::IfcPlate>());
+		addObjectToIndex<IfcSchema::IfcMember::list::ptr>(file_->instances_by_type<IfcSchema::IfcMember>());
 
-	// add doors to the rtree (for the appartment detection)
-	addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
-	addObjectToIndex<IfcSchema::IfcWindow::list::ptr>(file_->instances_by_type<IfcSchema::IfcWindow>());
+		// add doors to the rtree (for the appartment detection)
+		addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+		addObjectToIndex<IfcSchema::IfcWindow::list::ptr>(file_->instances_by_type<IfcSchema::IfcWindow>());
 
-	// find valid voids
-	applyVoids();
-
-	// =================================================================================================
-	// connectivity objects indexing
-	addObjectToCIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
-	addObjectToCIndex<IfcSchema::IfcStair::list::ptr>(file_->instances_by_type<IfcSchema::IfcStair>());
-
-	// =================================================================================================
-	// room objects indexing
-	addObjectToRIndex<IfcSchema::IfcSpace::list::ptr>(file_->instances_by_type<IfcSchema::IfcSpace>());
+		// find valid voids
+		applyVoids();
+		hasIndex_ = true;
+	}
 
 	// =================================================================================================
-	// opening indexing
+	
+	if (!hasCIndex_)
+	{
+		// connectivity objects indexing
+		addObjectToCIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+		addObjectToCIndex<IfcSchema::IfcStair::list::ptr>(file_->instances_by_type<IfcSchema::IfcStair>());
+
+		hasCIndex_ = true;
+	}
+
+	// =================================================================================================
+	
+	if (!hasRIndex_)
+	{
+		// room objects indexing
+		addObjectToRIndex<IfcSchema::IfcSpace::list::ptr>(file_->instances_by_type<IfcSchema::IfcSpace>());
+
+		hasRIndex_ = true;
+	}
+	
+	// =================================================================================================
 
 }
+
+void helper::indexRooms()
+{
+	if (!hasRIndex_)
+	{
+		// room objects indexing
+		addObjectToRIndex<IfcSchema::IfcSpace::list::ptr>(file_->instances_by_type<IfcSchema::IfcSpace>());
+
+		hasRIndex_ = true;
+	}
+}
+
 
 bg::model::box < BoostPoint3D > helper::makeObjectBox(IfcSchema::IfcProduct* product)
 {
@@ -645,6 +672,12 @@ TopoDS_Solid helper::makeSolidBox(gp_Pnt lll, gp_Pnt urr, double angle)
 
 void helper::correctRooms() 
 {
+	if (!hasRIndex_)
+	{
+		indexRooms();
+	}
+
+
 	// get all rooms in a cluser
 	std::vector<roomLookupValue> roomValues = getFullRLookup();
 
@@ -693,7 +726,7 @@ void helper::correctRooms()
 
 		for (size_t j = 0; j < cornerPoints.size(); j++)
 		{
-			auto currentCorner = cornerPoints[j];
+			auto currentCorner = rotatePointWorld(cornerPoints[j], originRot_);
 			if (urr.X() < currentCorner.X()) { urr.SetX(currentCorner.X()); }
 			if (urr.Y() < currentCorner.Y()) { urr.SetY(currentCorner.Y()); }
 			if (urr.Z() < currentCorner.Z()) { urr.SetZ(currentCorner.Z()); }
@@ -724,7 +757,7 @@ void helper::correctRooms()
 			{
 				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
 				gp_Pnt p = BRep_Tool::Pnt(vertex);
-				insideChecker.Perform(p, 0.01);
+				insideChecker.Perform(p, 0.0001);
 				if (!insideChecker.State() || insideChecker.IsOnAFace())
 				{
 					if (roomVolume[i] > roomVolume[qResult[j].second])
@@ -735,8 +768,8 @@ void helper::correctRooms()
 				}
 				if (complex)
 				{
-					complex = false;
-					break;
+					//complex = false;
+					//break;
 				}
 			}
 			if (complex) {
