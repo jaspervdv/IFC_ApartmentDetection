@@ -2,7 +2,6 @@
 #include "floorProcessor.h"
 
 #include <ShapeUpgrade_UnifySameDomain.hxx>
-#include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <gce_MakeLin.hxx>
 #include <IntTools_EdgeFace.hxx>
@@ -112,13 +111,9 @@ private:
 	std::vector<TopoDS_Face> getPartialFaces(std::vector<int> roomIndx, int voxelIndx);
 
 	TopoDS_Face getLowestFace(TopoDS_Shape shape);
-	std::vector<TopoDS_Face> getRoomFootprint(TopoDS_Shape shape);
 
 	// creates and adds a voxel object + checks with which products from the cluster it intersects
 	void addVoxel(int indx, helperCluster* cluster);
-
-	// updates the room data of every connectivity object
-	void updateConnections(TopoDS_Shape room, roomObject* rObject, std::vector<roomObject*> rObjectList, boost::geometry::model::box<BoostPoint3D> qBox, helperCluster* cluster);
 
 	void outputFieldToFile();
 

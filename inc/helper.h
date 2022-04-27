@@ -1,4 +1,4 @@
-//#define USE_IFC4
+#define USE_IFC4
 
 #ifdef USE_IFC4
 #define IfcSchema Ifc4
@@ -20,9 +20,11 @@
 
 #include <GProp_GProps.hxx>
 #include <BOPAlgo_Splitter.hxx>
+
 #include <BRepGProp.hxx>
 #include <BRepClass3d_SolidClassifier.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -67,7 +69,48 @@ gp_Pnt Point3DBTO(BoostPoint3D oP);
 gp_Pnt getLowestPoint(TopoDS_Shape shape, bool areaFilter);
 gp_Pnt getHighestPoint(TopoDS_Shape shape);
 
+std::vector<TopoDS_Face> getRoomFootprint(TopoDS_Shape shape);
+
 std::vector<IfcSchema::IfcProduct*> getNestedProducts(IfcSchema::IfcProduct* product);
+
+
+class roomObject {
+private:
+	IfcSchema::IfcSpace* self_;
+	std::vector<roomObject*> connections_;
+	gp_Pnt point_;
+	int indexNum_;
+	int sectionNum_ = -1;
+	bool isInside_ = true;
+public:
+
+	roomObject(IfcSchema::IfcSpace* s, int i) { self_ = s; point_ = gp_Pnt(i, 0, 0); indexNum_ = i; }
+
+	void setSelf(IfcSchema::IfcSpace* s) { self_ = s; }
+
+	void setPoint(int i) { point_ = gp_Pnt(i, 0, 0); }
+
+	void setIndx(int i) { indexNum_ = i; }
+
+	void setIsOutSide() { isInside_ = false; }
+
+	void setSNum(int i) { sectionNum_ = i; }
+
+	IfcSchema::IfcSpace* getSelf() { return self_; }
+
+	const std::vector<roomObject*> getConnections() { return connections_; }
+
+	void addConnection(roomObject* product) { connections_.emplace_back(product); }
+
+	gp_Pnt getPoint() { return point_; }
+
+	int getIdx() { return indexNum_; }
+
+	int getSNum() { return sectionNum_; }
+
+	bool isInside() { return isInside_; }
+
+};
 
 class helperCluster
 {
@@ -101,6 +144,9 @@ public:
 
 	helper* getHelper(int i) { return helperList[i]; }
 	std::vector<helper*> getHelpers() { return helperList; }
+
+	// updates the room data of every connectivity object
+	void updateConnections(TopoDS_Shape room, roomObject* rObject, std::vector<roomObject*> rObjectList, boost::geometry::model::box<BoostPoint3D> qBox);
 
 };
 
@@ -292,44 +338,5 @@ public:
 	~helper() {};
 
 };
-
-class roomObject {
-private:
-	IfcSchema::IfcSpace* self_;
-	std::vector<roomObject*> connections_;
-	gp_Pnt point_;
-	int indexNum_;
-	int sectionNum_ = -1;
-	bool isInside_ = true;
-public:
-
-	roomObject(IfcSchema::IfcSpace* s, int i) { self_ = s; point_ = gp_Pnt(i, 0, 0); indexNum_ = i; }
-
-	void setSelf(IfcSchema::IfcSpace* s) { self_ = s; }
-
-	void setPoint(int i) { point_ = gp_Pnt(i, 0, 0); }
-
-	void setIndx(int i) { indexNum_ = i; }
-
-	void setIsOutSide() { isInside_ = false; }
-
-	void setSNum(int i) { sectionNum_ = i; }
-
-	IfcSchema::IfcSpace* getSelf() { return self_; }
-
-	const std::vector<roomObject*> getConnections() { return connections_; }
-
-	void addConnection(roomObject* product) { connections_.emplace_back(product); }
-
-	gp_Pnt getPoint() { return point_; }
-
-	int getIdx() { return indexNum_; }
-
-	int getSNum() { return sectionNum_; }
-
-	bool isInside() { return isInside_; }
-
-};
-
 
 #endif // HELPER_HELPER_H

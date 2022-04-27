@@ -262,65 +262,6 @@ TopoDS_Face voxelfield::getLowestFace(TopoDS_Shape shape)
 	return faceList[lowestFaceIndx];
 }
 
-std::vector<TopoDS_Face> voxelfield::getRoomFootprint(TopoDS_Shape shape)
-{
-	TopExp_Explorer expl;
-	std::vector<TopoDS_Face> faceList;
-	double lowestZ = 9999;
-	int lowestFaceIndx = -1;
-
-	for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next()) { faceList.emplace_back(TopoDS::Face(expl.Current())); }
-
-	// get horizontal faces
-	std::vector<TopoDS_Face> horizontalFaceList;
-	std::vector<double> horizontalFaceHeight;
-	double totalHeight = 0;
-
-	for (int j = 0; j < faceList.size(); j++)
-	{
-		double z = 0;
-		int c = 0;
-		bool flat = true;
-
-		for (expl.Init(faceList[j], TopAbs_VERTEX); expl.More(); expl.Next()){
-			TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-			gp_Pnt p = BRep_Tool::Pnt(vertex);
-
-			if (c == 0)
-			{
-				z = p.Z();
-				c++;
-				continue;
-			}
-
-			if (z > p.Z() + 0.01 || z < p.Z() - 0.01)
-			{
-				flat = false;
-				break;
-			}
-		}
-
-		if (flat) 
-		{ 
-			horizontalFaceList.emplace_back(faceList[j]);
-			horizontalFaceHeight.emplace_back(z);
-			totalHeight += z;
-		}
-	}
-
-	double averageHeigth = totalHeight / horizontalFaceList.size();
-
-	std::vector<TopoDS_Face> footprint;
-	for (size_t i = 0; i < horizontalFaceHeight.size(); i++)
-	{
-		if (horizontalFaceHeight[i] < averageHeigth)
-		{
-			footprint.emplace_back(horizontalFaceList[i]);
-		}
-	}
-
-	return footprint;
-}
 
 void voxelfield::addVoxel(int indx, helperCluster* cluster)
 {
@@ -1181,7 +1122,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			roomObject* rObject = new roomObject(room, roomObjectList_.size());
 			roomObjectList_.emplace_back(rObject);
-			updateConnections(unMovedUnitedScaledRoom, rObject, roomObjectList_, qBox, cluster);
+			cluster->updateConnections(unMovedUnitedScaledRoom, rObject, roomObjectList_, qBox);
 			roomnum++;
 
 
@@ -1224,130 +1165,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 
 	}
-
 	createGraph(cluster);
-
-}
-
-void voxelfield::updateConnections(TopoDS_Shape room, roomObject* rObject, std::vector<roomObject*> rObjectList, boost::geometry::model::box<BoostPoint3D> qBox, helperCluster* cluster)
-{
-	int cSize = cluster->getSize();
-
-	int doorCount = 0;
-	int stairCount = 0;
-
-	// find connectivity data
-	// Get lowest Face
-	std::vector<TopoDS_Face> roomFootPrintList = getRoomFootprint(room);
-
-	TopoDS_Vertex lDoorP;
-
-	std::vector<Value> qResult;
-	TopExp_Explorer expl;
-
-	for (int j = 0; j < cSize; j++)
-	{
-		qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
-		cluster->getHelper(j)->getConnectivityIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
-
-		for (size_t k = 0; k < qResult.size(); k++)
-		{
-
-			ConnectLookupValue lookup = cluster->getHelper(j)->getCLookup(qResult[k].second);
-			TopoDS_Shape objectShape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup));
-
-			if (std::get<0>(lookup)->data().type()->name() == "IfcDoor")
-			{
-				bool found = false;
-
-
-				gp_Pnt groundObjectPoint = std::get<1>(lookup)[0];
-
-				for (size_t l = 0; l < roomFootPrintList.size(); l++)
-				{
-					for (expl.Init(roomFootPrintList[l], TopAbs_EDGE); expl.More(); expl.Next())
-					{
-						TopoDS_Edge edge = TopoDS::Edge(expl.Current());
-						TopExp_Explorer edgeExpl;
-						std::vector<gp_Pnt> edgePoints;
-						edgePoints.clear();
-
-						for (edgeExpl.Init(edge, TopAbs_VERTEX); edgeExpl.More(); edgeExpl.Next()) {
-							TopoDS_Vertex vertex = TopoDS::Vertex(edgeExpl.Current());
-							edgePoints.emplace_back(BRep_Tool::Pnt(vertex));
-						}
-
-						if (edgePoints.size() != 2) { std::cout << "error" << std::endl; }
-
-						double baseDistance = edgePoints[0].Distance(edgePoints[1]);
-						double triDistance = edgePoints[0].Distance(groundObjectPoint) + edgePoints[1].Distance(groundObjectPoint);
-
-						double buffer = 0.3;
-
-						if (abs(baseDistance - triDistance) <= buffer)
-						{
-							doorCount++;
-							std::get<2>(lookup)->emplace_back(rObject);
-
-							if (std::get<2>(lookup)->size() == 2)
-							{
-								std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
-								std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
-							}
-
-							found = true;
-						}
-						if (found)
-						{
-							break;
-						}
-					}
-				}
-
-				
-			}
-			if (std::get<0>(lookup)->data().type()->name() == "IfcStair") {
-
-				gp_Pnt groundObjectPoint = std::get<1>(lookup)[0];
-
-				gp_Trsf stairOffset;
-				stairOffset.SetTranslation({ 0,0,0 }, { 0,0,0.5 });
-
-				gp_Pnt topObjectPoint = std::get<1>(lookup)[1];
-
-				BRepClass3d_SolidClassifier insideChecker;
-				insideChecker.Load(room);
-				insideChecker.Perform(groundObjectPoint.Transformed(stairOffset), 0.01);
-
-				if (!insideChecker.State())
-				{
-					std::get<2>(lookup)->emplace_back(rObject);
-					stairCount++;
-					if (std::get<2>(lookup)->size() == 2)
-					{
-						std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
-						std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
-					}
-					continue;
-				}
-				insideChecker.Perform(topObjectPoint, 0.01);
-
-				if (!insideChecker.State())
-				{
-					std::get<2>(lookup)->emplace_back(rObject);
-					stairCount++;
-					if (std::get<2>(lookup)->size() == 2)
-					{
-						std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
-						std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
-					}
-					continue;
-				}
-
-			}
-		}
-	}
-	 rObject->getSelf()->setDescription("Has " + std::to_string(doorCount) + " unique doors and " + std::to_string(stairCount) + " unique stairs. Connected to : ");
 }
 	
 std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)
