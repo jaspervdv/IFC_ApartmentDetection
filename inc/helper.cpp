@@ -318,6 +318,48 @@ std::vector<IfcSchema::IfcProduct*> getNestedProducts(IfcSchema::IfcProduct* pro
 	return productList;
 }
 
+bool testSolid(TopoDS_Shape shape) 
+{
+	TopExp_Explorer expl;
+	for (expl.Init(shape, TopAbs_SOLID); expl.More(); expl.Next())
+	{
+		return true;
+	}
+	return false;
+}
+
+double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices) {
+	BoostPoint3D p1(vertices[0].X() - vertices[1].X(), vertices[0].Y() - vertices[1].Y(), vertices[0].Z() - vertices[1].Z());
+	BoostPoint3D p2(vertices[1].X() - p.X(), vertices[1].Y() - p.Y(), vertices[1].Z() - p.Z());
+	BoostPoint3D p3(vertices[2].X() - p.X(), vertices[2].Y() - p.Y(), vertices[2].Z() - p.Z());
+
+	return bg::dot_product(p1, bg::cross_product(p2, p3)) / 6;
+}
+
+bool triangleIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle)
+{
+	// check for potential intersection
+	double left = tVolume(triangle[0], { triangle[2], line[0], line[1] });
+	double right = tVolume(triangle[1], { triangle[2], line[0], line[1] });
+
+	double left2 = tVolume(triangle[1], { triangle[0], line[0], line[1] });
+	double right2 = tVolume(triangle[2], { triangle[0], line[0], line[1] });
+
+	double left3 = tVolume(triangle[2], { triangle[1], line[0], line[1] });
+	double right3 = tVolume(triangle[0], { triangle[1], line[0], line[1] });
+
+
+	if (left > 0 && right > 0 || left < 0 && right < 0) { return false; }
+	if (left2 > 0 && right2 > 0 || left2 < 0 && right2 < 0) { return false; }
+	if (left3 > 0 && right3 > 0 || left3 < 0 && right3 < 0) { return false; }
+
+	double leftFinal = tVolume(line[0], triangle);
+	double rightFinal = tVolume(line[1], triangle);
+
+	if (leftFinal > 0 && rightFinal < 0 || rightFinal > 0 && leftFinal < 0) { return true; }
+	return false;
+}
+
 helper::helper(std::string path) {
 
 	helper::findSchema(path);
@@ -638,6 +680,18 @@ void helper::indexRooms()
 	}
 }
 
+void helper::indexConnectiveShapes()
+{
+	if (!hasCIndex_)
+	{
+		// connectivity objects indexing
+		addObjectToCIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+		addObjectToCIndex<IfcSchema::IfcStair::list::ptr>(file_->instances_by_type<IfcSchema::IfcStair>());
+
+		hasCIndex_ = true;
+	}
+}
+
 
 bg::model::box < BoostPoint3D > helper::makeObjectBox(IfcSchema::IfcProduct* product)
 {
@@ -847,7 +901,19 @@ void helper::correctRooms()
 
 std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduct* product)
 {
-	std::vector<TopoDS_Face> faceList = getObjectFaces(product, true);
+	return triangulateShape(&getObjectShape(product, true));
+}
+
+std::vector<std::vector<gp_Pnt>> triangulateShape(TopoDS_Shape* shape) {
+	
+	std::vector<TopoDS_Face> faceList;
+
+	TopExp_Explorer expl;
+	for (expl.Init(*shape, TopAbs_FACE); expl.More(); expl.Next())
+	{
+		TopoDS_Face face = TopoDS::Face(expl.Current());
+		faceList.emplace_back(face);
+	}
 
 	std::vector<std::vector<gp_Pnt>> triangleMeshList;
 
@@ -881,6 +947,7 @@ std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduc
 	}
 
 	return triangleMeshList;
+
 }
 
 template <typename T>
@@ -1757,6 +1824,15 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, st
 {
 	int cSize = size_;
 
+	for (size_t i = 0; i < cSize; i++)
+	{
+		if (!helperList[i]->hasClookup())
+		{
+			helperList[i]->indexConnectiveShapes();
+		}
+	}
+
+
 	int doorCount = 0;
 	int stairCount = 0;
 
@@ -1832,19 +1908,53 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, st
 			}
 			if (std::get<0>(lookup)->data().type()->name() == "IfcStair") {
 
-				gp_Pnt groundObjectPoint = std::get<1>(lookup)[0];
-
 				gp_Trsf stairOffset;
-				stairOffset.SetTranslation({ 0,0,0 }, { 0,0,0.5 });
+
+				gp_Pnt groundObjectPoint = std::get<1>(lookup)[0];
+				groundObjectPoint.SetZ(groundObjectPoint.Z() + 0.5);
+				gp_Pnt groundObjectPointHigh = groundObjectPoint;
+				groundObjectPointHigh.SetZ(groundObjectPoint.Z() + 1000);
+
+				std::vector<gp_Pnt> lowLine = { groundObjectPoint,  groundObjectPointHigh };
+				auto faceTriangles = triangulateShape(&room);
+
+				int iCount = 0;
+				for (size_t l = 0; l < faceTriangles.size(); l++)
+				{
+					if (triangleIntersecting(lowLine, faceTriangles[l]))
+					{
+						iCount ++;
+					}
+				}
+
+				if (iCount % 2 != 0) {
+					std::get<2>(lookup)->emplace_back(rObject);
+					stairCount++;
+					if (std::get<2>(lookup)->size() == 2)
+					{
+						std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
+						std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
+					}
+
+					continue;
+				}
 
 				gp_Pnt topObjectPoint = std::get<1>(lookup)[1];
+				gp_Pnt topObjectPointHigh = topObjectPoint;
+				topObjectPointHigh.SetZ(topObjectPoint.Z() + 1000);
 
-				BRepClass3d_SolidClassifier insideChecker;
-				insideChecker.Load(room);
-				insideChecker.Perform(groundObjectPoint.Transformed(stairOffset), 0.01);
+				std::vector<gp_Pnt> highLine = { topObjectPoint,  topObjectPointHigh };
 
-				if (!insideChecker.State())
+				iCount = 0;
+				for (size_t l = 0; l < faceTriangles.size(); l++)
 				{
+					if (triangleIntersecting(highLine, faceTriangles[l]))
+					{
+						iCount++;
+					}
+				}
+
+				if (iCount % 2 != 0) {
 					std::get<2>(lookup)->emplace_back(rObject);
 					stairCount++;
 					if (std::get<2>(lookup)->size() == 2)
@@ -1854,22 +1964,232 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, st
 					}
 					continue;
 				}
-				insideChecker.Perform(topObjectPoint, 0.01);
+			}
+		}
+	}
+	rObject->getSelf()->setDescription("Has " + std::to_string(doorCount) + " unique doors and " + std::to_string(stairCount) + " unique stairs. Connected to : ");
+}
 
-				if (!insideChecker.State())
+std::vector<roomObject*> helperCluster::createGraphData()
+{
+
+	double scaler = 10;
+
+	std::vector<roomObject*> roomObjectList;
+
+	for (size_t i = 0; i < size_; i++)
+	{
+		helper* h = helperList[i];
+		IfcSchema::IfcSpace::list::ptr spaceList =  h->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>();
+
+		for (auto it = spaceList->begin(); it != spaceList->end(); ++it) {
+
+			IfcSchema::IfcSpace* currentSpace = *it;
+			roomObject* rObject = new roomObject(currentSpace, roomObjectList.size());
+			roomObjectList.emplace_back(rObject);
+
+			TopoDS_Shape roomShape = h->getObjectShape(currentSpace);
+
+			// compute the room volumes
+			GProp_GProps gprop;
+
+			BRepGProp::VolumeProperties(roomShape, gprop);
+			double volume = gprop.Mass();
+			rObject->setArea(volume);
+
+			auto base = rotatedBBoxDiagonal(h->getObjectPoints(currentSpace), 0);
+			BoostPoint3D boostlllpoint = Point3DOTB(std::get<0>(base));
+			BoostPoint3D boosturrpoint = Point3DOTB(std::get<1>(base));
+
+			double dx = (bg::get<0>(boosturrpoint) - bg::get<0>(boostlllpoint)) / scaler;
+			double dy = (bg::get<1>(boosturrpoint) - bg::get<1>(boostlllpoint)) / scaler;
+			double dz = (bg::get<2>(boosturrpoint) - bg::get<2>(boostlllpoint)) / scaler;
+
+			BoostPoint3D scaledlllpoint;
+			BoostPoint3D scaledurrpoint;
+
+			boost::geometry::strategy::transform::translate_transformer<double, 3, 3> translate(dx, dy, dz);
+			bg::transform(boosturrpoint, scaledurrpoint, translate);
+			boost::geometry::strategy::transform::translate_transformer<double, 3, 3> translate2(-dx, -dy, -dz);
+			bg::transform(boostlllpoint, scaledlllpoint, translate2);
+
+			auto qBox = bg::model::box < BoostPoint3D >(scaledlllpoint, scaledurrpoint);
+
+			updateConnections(roomShape, rObject, roomObjectList, qBox);
+		}
+	}
+	return roomObjectList;
+}
+
+std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rObjectList) {
+	// update data to outside 
+	int cSize = size_;
+
+	// create outside object
+	roomObject* outsideObject = new roomObject(nullptr, rObjectList.size());
+	outsideObject->setIsOutSide();
+
+	//roomObjectList.emplace_back(outsideObject);
+	rObjectList.insert(rObjectList.begin(), outsideObject);
+
+	for (size_t i = 0; i < cSize; i++)
+	{
+		std::vector<ConnectLookupValue> lookup = helperList[i]->getFullClookup();
+
+		for (size_t j = 0; j < lookup.size(); j++)
+		{
+			if (std::get<2>(lookup[j])->size() == 1)
+			{
+				std::vector<gp_Pnt> doorPointList = helperList[i]->getObjectPoints(std::get<0>(lookup[j]));
+
+				double lowZ = 99999999999;
+				for (size_t k = 0; k < doorPointList.size(); k++)
 				{
-					std::get<2>(lookup)->emplace_back(rObject);
-					stairCount++;
-					if (std::get<2>(lookup)->size() == 2)
-					{
-						std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
-						std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
-					}
-					continue;
+					double pZ = doorPointList[k].Z();
+					if (pZ < lowZ) { lowZ = pZ; }
+				}
+
+				if (lowZ < 2 && lowZ > -0.5) //TODO door height needs to be smarter
+				{
+					std::get<2>(lookup[j])[0][0]->addConnection(outsideObject);
 				}
 
 			}
 		}
 	}
-	rObject->getSelf()->setDescription("Has " + std::to_string(doorCount) + " unique doors and " + std::to_string(stairCount) + " unique stairs. Connected to : ");
+
+	// Make sections
+	int counter = 0;
+
+	std::vector<roomObject*> bufferList;
+
+	for (size_t i = 0; i < rObjectList.size(); i++)
+	{
+		roomObject* currentRoom = rObjectList[i];
+
+		if (!currentRoom->isInside())
+		{
+			currentRoom->setSNum(-2);
+			continue;
+		}
+
+		if (currentRoom->getConnections().size() != 1) { continue; } // always start isolated
+		if (currentRoom->getSNum() != -1) { continue; }
+
+		bufferList.emplace_back(currentRoom);
+		currentRoom->setSNum(counter);
+
+		while (bufferList.size() > 0)
+		{
+			std::vector<roomObject*> tempBufferList;
+			tempBufferList.clear();
+
+			for (size_t j = 0; j < bufferList.size(); j++)
+			{
+				std::vector<roomObject*> connections = bufferList[j]->getConnections();
+				for (size_t k = 0; k < connections.size(); k++)
+				{
+					if (connections[k]->getSNum() == -1 && connections[k]->isInside())
+					{
+						connections[k]->setSNum(counter);
+						tempBufferList.emplace_back(connections[k]);
+					}
+				}
+			}
+			bufferList.clear();
+			bufferList = tempBufferList;
+		}
+		counter++;
+	}
+	return rObjectList;
+}
+
+void helperCluster::writeGraph(std::string path, std::vector<roomObject*> rObjectList) {
+	
+	// output the graph data
+	std::string p = path;
+
+	std::ofstream storageFile;
+	storageFile.open(path);
+
+	storageFile << "_pointList_" << std::endl;
+	for (size_t i = 0; i < rObjectList.size(); i++)
+	{
+		gp_Pnt p = rObjectList[i]->getPoint();
+		storageFile << p.X() << ", " << p.X() << ", " << p.Z() << std::endl;
+	}
+	storageFile << "_name_" << std::endl;
+	for (size_t i = 0; i < rObjectList.size(); i++)
+	{
+		if (rObjectList[i]->isInside())
+		{
+			if (rObjectList[i]->getSelf()->hasLongName()) { storageFile << rObjectList[i]->getSelf()->LongName() << std::endl; }
+			else { storageFile << rObjectList[i]->getSelf()->Name() << std::endl; }
+		}
+		else
+		{
+			storageFile << "Outside" << std::endl;
+		}
+	}
+
+	storageFile << "_area_" << std::endl;
+	storageFile << 100 << std::endl;
+	for (size_t i = 0; i < rObjectList.size(); i++)
+	{
+		if (rObjectList[i]->isInside())
+		{
+			storageFile << rObjectList[i]->getArea() << std::endl;
+		}
+	}
+
+	storageFile << "_connection_" << std::endl;
+	for (size_t i = 0; i < rObjectList.size(); i++)
+	{
+		auto connections = rObjectList[i]->getConnections();
+
+		for (size_t j = 0; j < connections.size(); j++)
+		{
+			if (rObjectList[i]->getIdx() + 1 >= rObjectList.size())
+			{
+				storageFile << 0 << ", " << connections[j]->getIdx() + 1 << std::endl;
+			}
+			else if (connections[j]->getIdx() + 1 >= rObjectList.size())
+			{
+				storageFile << rObjectList[i]->getIdx() + 1 << ", " << 0 << std::endl;
+			}
+			else
+			{
+				storageFile << rObjectList[i]->getIdx() + 1 << ", " << connections[j]->getIdx() + 1 << std::endl;
+			}
+
+		}
+	}
+
+	storageFile << "_sections_" << std::endl;
+	for (size_t i = 0; i < rObjectList.size(); i++)
+	{
+		storageFile << rObjectList[i]->getSNum() << std::endl;
+	}
+}
+
+void helperCluster::updateRoomCData(std::vector<roomObject*> rObjectList)
+{
+	for (size_t i = 0; i < rObjectList.size(); i++)
+	{
+		roomObject* rObject = rObjectList[i];
+		auto connections = rObject->getConnections();
+		std::string description = "";
+		for (size_t j = 0; j < connections.size(); j++) { 
+			description = description + connections[j]->getSelf()->Name() + ", "; 
+		}
+
+		if (rObject->getSelf()->hasDescription())
+		{
+			rObject->getSelf()->setDescription(rObject->getSelf()->Description() + description);
+		}
+		else
+		{
+			rObject->getSelf()->setDescription(description);
+		}
+	}
 }

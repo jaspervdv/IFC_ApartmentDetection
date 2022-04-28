@@ -53,8 +53,8 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_HZG_DigitalHub.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_LFT_DigitalHub.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_SAN_DigitalHub.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
@@ -319,13 +319,10 @@ int main(int argc, char** argv) {
 		std::cout << "Construct Graph data? (Y/N): ";
 		if (yesNoQuestion())
 		{
-			for (int i = 0; i < hCluster->getSize(); i++)
-			{
-				if (!hasComplex) { hCluster->getHelper(i)->correctRooms(); } // graph process needs complex rooms being made
-
-				// TODO create seperate graph creation process
-			}
-
+			std::vector<roomObject*> roomobjects = hCluster->createGraphData();
+			hCluster->updateRoomCData(roomobjects);
+			roomobjects = hCluster->createGraph(roomobjects);
+			hCluster->writeGraph(graphPath + "_graph.txt", roomobjects);
 		}
 		std::cout << std::endl;
 	}

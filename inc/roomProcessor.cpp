@@ -1162,8 +1162,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		std::string description = "";
 		for (size_t i = 0; i <connections.size(); i++) { description = description + connections[i]->getSelf()->Name() + ", "; }
 		rObject->getSelf()->setDescription(rObject->getSelf()->Description() + description);
-
-
 	}
 	createGraph(cluster);
 }
@@ -1350,14 +1348,6 @@ std::vector<std::vector<int>> voxel::getVoxelEdges()
 	};
 }
 
-double voxel::tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices) {
-	BoostPoint3D p1(vertices[0].X() - vertices[1].X(), vertices[0].Y() - vertices[1].Y(), vertices[0].Z() - vertices[1].Z());
-	BoostPoint3D p2(vertices[1].X() - p.X(), vertices[1].Y() - p.Y(), vertices[1].Z() - p.Z());
-	BoostPoint3D p3(vertices[2].X() - p.X(), vertices[2].Y() - p.Y(), vertices[2].Z() - p.Z());
-
-	return bg::dot_product(p1, bg::cross_product(p2, p3))/6;
-}
-
 bool voxel::checkIntersecting(LookupValue lookup, std::vector<gp_Pnt> voxelPoints, helper* h)
 {
 	std::vector<std::vector<int>> vets = getVoxelEdges();
@@ -1380,7 +1370,7 @@ bool voxel::checkIntersecting(LookupValue lookup, std::vector<gp_Pnt> voxelPoint
 
 		for (size_t k = 0; k < productPoints.size(); k+=2)
 		{
-			if (checkIntersecting({ productPoints[k], productPoints[k + 1] }, voxelTriangle))
+			if (triangleIntersecting({ productPoints[k], productPoints[k + 1] }, voxelTriangle))
 			{
 				isIntersecting_ = true;
 				return true;
@@ -1397,7 +1387,7 @@ bool voxel::checkIntersecting(LookupValue lookup, std::vector<gp_Pnt> voxelPoint
 
 		for (size_t k = 0; k < vets.size(); k++)
 		{
-			if (checkIntersecting({ voxelPoints[vets[k][0]], voxelPoints[vets[k][1]] }, triangle))
+			if (triangleIntersecting({ voxelPoints[vets[k][0]], voxelPoints[vets[k][1]] }, triangle))
 			{
 				isIntersecting_ = true;
 				return true; 
@@ -1472,26 +1462,4 @@ bool voxel::linearEqIntersection(std::vector<gp_Pnt> productPoints, std::vector<
 	return false;
 }
 
-bool voxel::checkIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle)
-{
-	// check for potential intersection
-	double left = tVolume(triangle[0], { triangle[2], line[0], line[1] });
-	double right = tVolume(triangle[1], { triangle[2], line[0], line[1] });
 
-	double left2 = tVolume(triangle[1], { triangle[0], line[0], line[1] });
-	double right2 = tVolume(triangle[2], { triangle[0], line[0], line[1] });
-
-	double left3 = tVolume(triangle[2], { triangle[1], line[0], line[1] });
-	double right3 = tVolume(triangle[0], { triangle[1], line[0], line[1] });
-
-
-	if (left > 0 && right > 0 || left < 0 && right < 0) { return false; }
-	if (left2 > 0 && right2 > 0 || left2 < 0 && right2 < 0) { return false; }
-	if (left3 > 0 && right3 > 0 || left3 < 0 && right3 < 0) { return false; }
-
-	double leftFinal = tVolume(line[0], triangle);
-	double rightFinal = tVolume(line[1], triangle);
-
-	if (leftFinal > 0 && rightFinal < 0 || rightFinal > 0 && leftFinal < 0) { return true; }
-	return false;
-}

@@ -22,11 +22,6 @@ private:
 	double sizeXY_;
 	double sizeZ_;
 
-	// compute the signed volume
-	double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices);
-
-	bool checkIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle);
-
 public:
 
 	// greates an axis aligned voxel

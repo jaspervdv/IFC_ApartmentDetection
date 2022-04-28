@@ -73,6 +73,12 @@ std::vector<TopoDS_Face> getRoomFootprint(TopoDS_Shape shape);
 
 std::vector<IfcSchema::IfcProduct*> getNestedProducts(IfcSchema::IfcProduct* product);
 
+bool testSolid(TopoDS_Shape shape);
+
+std::vector<std::vector<gp_Pnt>> triangulateShape(TopoDS_Shape* shape);
+
+double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices);
+bool triangleIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle);
 
 class roomObject {
 private:
@@ -82,6 +88,8 @@ private:
 	int indexNum_;
 	int sectionNum_ = -1;
 	bool isInside_ = true;
+	double area_ = 0;
+
 public:
 
 	roomObject(IfcSchema::IfcSpace* s, int i) { self_ = s; point_ = gp_Pnt(i, 0, 0); indexNum_ = i; }
@@ -96,6 +104,8 @@ public:
 
 	void setSNum(int i) { sectionNum_ = i; }
 
+	void setArea(double i) { area_ = i; }
+
 	IfcSchema::IfcSpace* getSelf() { return self_; }
 
 	const std::vector<roomObject*> getConnections() { return connections_; }
@@ -109,6 +119,8 @@ public:
 	int getSNum() { return sectionNum_; }
 
 	bool isInside() { return isInside_; }
+
+	double getArea() { return area_; }
 
 };
 
@@ -147,6 +159,10 @@ public:
 
 	// updates the room data of every connectivity object
 	void updateConnections(TopoDS_Shape room, roomObject* rObject, std::vector<roomObject*> rObjectList, boost::geometry::model::box<BoostPoint3D> qBox);
+	std::vector<roomObject*> createGraphData();
+	std::vector<roomObject*> createGraph(std::vector<roomObject*> rObjectList);
+	void writeGraph(std::string path, std::vector<roomObject*> rObjectList);
+	void updateRoomCData(std::vector<roomObject*> rObjectList);
 
 };
 
@@ -207,8 +223,6 @@ private:
 	bg::model::box <BoostPoint3D> makeObjectBox(std::vector<IfcSchema::IfcProduct*> products);
 	TopoDS_Solid makeSolidBox(gp_Pnt lll, gp_Pnt urr, double angle);
 
-	std::vector<std::vector<gp_Pnt>> triangulateProduct(IfcSchema::IfcProduct* product);
-
 	template <typename T>
 	void addObjectToIndex(T object);
 
@@ -239,6 +253,7 @@ public:
 	// makes a spatial index for the geometry
 	void indexGeo();
 	void indexRooms();
+	void indexConnectiveShapes();
 
 	// corrects room classification
 	void correctRooms();
@@ -288,6 +303,8 @@ public:
 
 	const bgi::rtree<Value, bgi::rstar<treeDepth>>* getRoomIndexPointer() { return &rIndex_; }
 
+	bool hasClookup() { return hasCIndex_; }
+
 	auto getLookup(int i) { return productLookup_[i]; }
 	auto updateLookupTriangle(std::vector<std::vector<gp_Pnt>> triangleMeshList, int i) { std::get<1>(productLookup_[i]) = triangleMeshList; }
 	
@@ -310,6 +327,8 @@ public:
 	void updateShapeLookup(IfcSchema::IfcProduct* product, TopoDS_Shape shape, bool adjusted = false);
 	void updateIndex(IfcSchema::IfcProduct* product, TopoDS_Shape shape);
 	void applyVoids();
+
+	std::vector<std::vector<gp_Pnt>> triangulateProduct(IfcSchema::IfcProduct* product);
 
 	template <typename T>
 	void voidShapeAdjust(T products);
