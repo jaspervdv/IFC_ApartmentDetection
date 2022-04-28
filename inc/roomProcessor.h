@@ -4,7 +4,6 @@
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <gce_MakeLin.hxx>
-#include <IntTools_EdgeFace.hxx>
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>

@@ -54,8 +54,8 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_LFT_DigitalHub.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_SAN_DigitalHub.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
@@ -301,20 +301,26 @@ int main(int argc, char** argv) {
 	}
 	else { // if no new room creation
 
-		bool hasComplex = false;
-
 		std::cout << std::endl;
-		std::cout << "Reconstruct complex roomobjects present in the original model?? (Y/N): ";
+		std::cout << "Reconstruct complex roomobjects present in the original model? (Y/N): ";
 		if (yesNoQuestion())
 		{
 
 			for (int i = 0; i < hCluster->getSize(); i++)
 			{
-				hasComplex = true;
 				hCluster->getHelper(i)->correctRooms();
 			}
 
 		}
+
+		std::cout << std::endl;
+		std::cout << "Reconstruct topologic room relations? (Y/N): ";
+		if (yesNoQuestion())
+		{
+			hCluster->determineRoomBoundaries();
+		}
+
+
 		std::cout << std::endl;
 		std::cout << "Construct Graph data? (Y/N): ";
 		if (yesNoQuestion())

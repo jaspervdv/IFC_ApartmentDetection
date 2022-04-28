@@ -31,6 +31,7 @@
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <STEPControl_Writer.hxx>
 #include <STEPControl_StepModelType.hxx>
+#include <IntTools_EdgeFace.hxx>
 
 #include <memory>
 
@@ -79,6 +80,8 @@ std::vector<std::vector<gp_Pnt>> triangulateShape(TopoDS_Shape* shape);
 
 double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices);
 bool triangleIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle);
+
+std::vector<IfcSchema::IfcRelSpaceBoundary*> findBoundary(TopoDS_Shape roomShape, IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList);
 
 class roomObject {
 private:
@@ -163,6 +166,8 @@ public:
 	std::vector<roomObject*> createGraph(std::vector<roomObject*> rObjectList);
 	void writeGraph(std::string path, std::vector<roomObject*> rObjectList);
 	void updateRoomCData(std::vector<roomObject*> rObjectList);
+
+	void determineRoomBoundaries();
 
 };
 
@@ -304,6 +309,8 @@ public:
 	const bgi::rtree<Value, bgi::rstar<treeDepth>>* getRoomIndexPointer() { return &rIndex_; }
 
 	bool hasClookup() { return hasCIndex_; }
+
+	bool hasIndex() { return hasIndex_; }
 
 	auto getLookup(int i) { return productLookup_[i]; }
 	auto updateLookupTriangle(std::vector<std::vector<gp_Pnt>> triangleMeshList, int i) { std::get<1>(productLookup_[i]) = triangleMeshList; }

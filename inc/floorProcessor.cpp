@@ -294,8 +294,6 @@ std::vector<double> floorProcessor::computeFloorElevations(helper* data)
 		}
 	}
 
-
-
 	std::vector<FloorGroupStruct> floorGroups;
 
 	// pair per "pure" elevation

@@ -360,6 +360,124 @@ bool triangleIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_P
 	return false;
 }
 
+std::vector<IfcSchema::IfcRelSpaceBoundary*> findBoundary(TopoDS_Shape roomShape, IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList) {
+	
+	TopExp_Explorer expl;
+
+	// get rel space boundaries
+	BRepExtrema_DistShapeShape distanceMeasurer;
+	distanceMeasurer.LoadS1(roomShape);
+
+	std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList;
+	std::vector<IfcSchema::IfcDoor*> connectedDoors; // TODO improve door implementation
+
+	for (size_t j = 0; j < qProductList.size(); j++)
+	{
+		bool isConnected = true;
+
+		// find objects that are close
+		IfcSchema::IfcProduct* qProduct = std::get<0>(qProductList[j]);
+		TopoDS_Shape qShape = std::get<1>(qProductList[j]);
+
+		distanceMeasurer.LoadS2(qShape);
+
+		distanceMeasurer.Perform();
+
+		double distance = distanceMeasurer.Value();
+
+		if (distance > 0.5)
+		{
+			isConnected = false;
+		}
+		else if (distance < 0.0001) // if distance is 0 it is known it is connected
+		{
+			isConnected = true;
+
+
+		}
+		else if (distance < 0.5)
+		{
+			int counter = 0;
+
+			double x1 = 0;
+			double x2 = 0;
+			double y1 = 0;
+			double y2 = 0;
+			double z1 = 0;
+			double z2 = 0;
+
+			for (size_t k = 1; k < distanceMeasurer.NbSolution(); k++)
+			{
+				gp_Pnt p1 = distanceMeasurer.PointOnShape1(k);
+				gp_Pnt p2 = distanceMeasurer.PointOnShape2(k);
+
+				x1 += p1.X();
+				x2 += p2.X();
+				y1 += p1.Y();
+				y2 += p2.Y();
+				z1 += p1.Z();
+				z2 += p2.Z();
+
+				counter++;
+			}
+
+			gp_Pnt p1n(x1 / counter, y1 / counter, z1 / counter);
+			gp_Pnt p2n(x2 / counter, y2 / counter, z2 / counter);
+
+			if (isnan(p1n.X()) || isnan(p1n.Y()) || isnan(p1n.Z()) ||
+				isnan(p2n.X()) || isnan(p2n.Y()) || isnan(p2n.Z()))
+			{
+				isConnected = false;
+			}
+			else
+			{
+				TopoDS_Edge shortestEdge = BRepBuilderAPI_MakeEdge(p1n, p2n);
+
+				for (size_t k = 0; k < qProductList.size(); k++)
+				{
+					if (j == k) { continue; }
+
+					IfcSchema::IfcProduct* matchingProduct = std::get<0>(qProductList[k]);
+
+					IntTools_EdgeFace intersector;
+					intersector.SetEdge(shortestEdge);
+
+					for (expl.Init(std::get<1>(qProductList[k]), TopAbs_FACE); expl.More(); expl.Next()) {
+						intersector.SetFace(TopoDS::Face(expl.Current()));
+						intersector.Perform();
+
+						if (intersector.CommonParts().Size() > 0) {
+							isConnected = false;
+							break;
+						}
+					}
+					if (!isConnected)
+					{
+						break;
+					}
+				}
+			}
+		}
+		if (isConnected)
+		{
+			IfcSchema::IfcRelSpaceBoundary* boundary = new IfcSchema::IfcRelSpaceBoundary(
+				IfcParse::IfcGlobalId(),
+				0,
+				std::string(""),
+				std::string(""),
+				room,
+				qProduct->as<IfcSchema::IfcElement>(),
+				0,
+				IfcSchema::IfcPhysicalOrVirtualEnum::IfcPhysicalOrVirtual_PHYSICAL,
+				IfcSchema::IfcInternalOrExternalEnum::IfcInternalOrExternal_INTERNAL
+			);
+
+			boundaryList.emplace_back(boundary);
+		}
+	}
+	return boundaryList;
+}
+
 helper::helper(std::string path) {
 
 	helper::findSchema(path);
@@ -882,8 +1000,8 @@ void helper::correctRooms()
 				}
 				if (complex)
 				{
-					//complex = false;
-					//break;
+					complex = false;
+					break;
 				}
 			}
 			if (complex) {
@@ -1859,8 +1977,6 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, st
 			if (std::get<0>(lookup)->data().type()->name() == "IfcDoor")
 			{
 				bool found = false;
-
-
 				gp_Pnt groundObjectPoint = std::get<1>(lookup)[0];
 
 				for (size_t l = 0; l < roomFootPrintList.size(); l++)
@@ -2190,6 +2306,81 @@ void helperCluster::updateRoomCData(std::vector<roomObject*> rObjectList)
 		else
 		{
 			rObject->getSelf()->setDescription(description);
+		}
+	}
+}
+
+void helperCluster::determineRoomBoundaries() {
+	// remove all rell space boundaries
+	for (size_t i = 0; i < size_; i++)
+	{
+		IfcSchema::IfcRelSpaceBoundary::list::ptr rSBList = helperList[i]->getSourceFile()->instances_by_type<IfcSchema::IfcRelSpaceBoundary>();
+
+		for (IfcSchema::IfcRelSpaceBoundary::list::it it = rSBList->begin(); it != rSBList->end(); ++it)
+		{
+			IfcSchema::IfcRelSpaceBoundary* rSB = *it;
+			helperList[i]->getSourceFile()->removeEntity(rSB);
+		}
+	}
+	
+	for (size_t i = 0; i < size_; i++)
+	{
+		helper* h = helperList[i];
+
+		if (!h->hasIndex())
+		{
+			h->indexGeo();
+		}
+
+		IfcSchema::IfcSpace::list::ptr spaceList = (h->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>());
+
+		double scaler = 10;
+
+		for (auto it = spaceList->begin(); it != spaceList->end(); ++it) {
+			IfcSchema::IfcSpace* currentSpace = *it;
+			TopoDS_Shape spaceShape = h->getObjectShape(currentSpace);
+			std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList;
+
+			auto base = rotatedBBoxDiagonal(h->getObjectPoints(spaceShape), 0);
+			BoostPoint3D boostlllpoint = Point3DOTB(std::get<0>(base));
+			BoostPoint3D boosturrpoint = Point3DOTB(std::get<1>(base));
+
+			double dx = (bg::get<0>(boosturrpoint) - bg::get<0>(boostlllpoint)) / scaler;
+			double dy = (bg::get<1>(boosturrpoint) - bg::get<1>(boostlllpoint)) / scaler;
+			double dz = (bg::get<2>(boosturrpoint) - bg::get<2>(boostlllpoint)) / scaler;
+
+			BoostPoint3D scaledlllpoint;
+			BoostPoint3D scaledurrpoint;
+
+			boost::geometry::strategy::transform::translate_transformer<double, 3, 3> translate(dx, dy, dz);
+			bg::transform(boosturrpoint, scaledurrpoint, translate);
+			boost::geometry::strategy::transform::translate_transformer<double, 3, 3> translate2(-dx, -dy, -dz);
+			bg::transform(boostlllpoint, scaledlllpoint, translate2);
+			
+			auto qBox = bg::model::box < BoostPoint3D >(scaledlllpoint, scaledurrpoint);
+
+			std::vector<Value> qResult;
+
+			qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
+			h->getIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
+
+			if (qResult.size() == 0) { continue; }
+
+			for (size_t k = 0; k < qResult.size(); k++)
+			{
+				LookupValue lookup = h->getLookup(qResult[k].second);
+				IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
+
+				qProductList.emplace_back(std::make_tuple(qProduct, h->getObjectShape(std::get<0>(lookup), false)));
+			}
+
+			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList = findBoundary(spaceShape, currentSpace, qProductList);
+
+			for (size_t j = 0; j < boundaryList.size(); j++)
+			{
+				h->getSourceFile()->addEntity(boundaryList[j]);
+			}
+
 		}
 	}
 }

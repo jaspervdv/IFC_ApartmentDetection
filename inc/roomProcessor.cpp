@@ -999,118 +999,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			);
 #endif // USE_IFC4
 
-			// get rel space boundaries
-			BRepExtrema_DistShapeShape distanceMeasurer;
-			distanceMeasurer.LoadS1(unMovedUnitedScaledRoom);
-			
-			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList;
-			std::vector<IfcSchema::IfcDoor*> connectedDoors; // TODO improve door implementation
-
-			for (size_t j = 0; j < qProductList.size(); j++)
-			{
-				bool isConnected = true;
-
-				// find objects that are close
-				IfcSchema::IfcProduct* qProduct = std::get<0>(qProductList[j]);
-				TopoDS_Shape qShape = std::get<1>(qProductList[j]);
-
-				distanceMeasurer.LoadS2(qShape);
-
-				distanceMeasurer.Perform();
-
-				double distance = distanceMeasurer.Value();
-
-				if (distance > 0.5)
-				{
-					isConnected = false;
-				}
-				else if (distance < 0.0001) // if distance is 0 it is known it is connected
-				{
-					isConnected = true;
-
-
-				}
-				else if (distance < 0.5)
-				{
-					int counter = 0;
-
-					double x1 = 0;
-					double x2 = 0;
-					double y1 = 0;
-					double y2 = 0;
-					double z1 = 0;
-					double z2 = 0;
-
-					for (size_t k = 1; k < distanceMeasurer.NbSolution(); k++)
-					{
-						gp_Pnt p1 = distanceMeasurer.PointOnShape1(k);
-						gp_Pnt p2 = distanceMeasurer.PointOnShape2(k);
-
-						x1 += p1.X();
-						x2 += p2.X();
-						y1 += p1.Y();
-						y2 += p2.Y();
-						z1 += p1.Z();
-						z2 += p2.Z();
-
-						counter++;
-					}
-
-					gp_Pnt p1n(x1 / counter, y1 / counter, z1 / counter);
-					gp_Pnt p2n(x2 / counter, y2 / counter, z2 / counter);
-					
-					if (isnan(p1n.X()) || isnan(p1n.Y()) || isnan(p1n.Z()) ||
-						isnan(p2n.X()) || isnan(p2n.Y()) || isnan(p2n.Z()))
-					{
-						isConnected = false;
-					}
-					else
-					{
-						TopoDS_Edge shortestEdge = BRepBuilderAPI_MakeEdge(p1n, p2n);
-
-						for (size_t k = 0; k < qProductList.size(); k++)
-						{
-							if (j == k) { continue; }
-
-							IfcSchema::IfcProduct* matchingProduct = std::get<0>(qProductList[k]);
-
-							IntTools_EdgeFace intersector;
-							intersector.SetEdge(shortestEdge);
-
-							for (expl.Init(std::get<1>(qProductList[k]), TopAbs_FACE); expl.More(); expl.Next()) {
-								intersector.SetFace(TopoDS::Face(expl.Current()));
-								intersector.Perform();
-
-								if (intersector.CommonParts().Size() > 0) {
-									isConnected = false;
-									break;
-								}
-							}
-							if (!isConnected)
-							{
-								break;
-							}
-						}
-					}
-				}
-				if (isConnected)
-				{
-					IfcSchema::IfcRelSpaceBoundary* boundary = new IfcSchema::IfcRelSpaceBoundary(
-						IfcParse::IfcGlobalId(),
-						0,
-						std::string(""),
-						std::string(""),
-						room,
-						qProduct->as<IfcSchema::IfcElement>(),
-						0,
-						IfcSchema::IfcPhysicalOrVirtualEnum::IfcPhysicalOrVirtual_PHYSICAL,
-						IfcSchema::IfcInternalOrExternalEnum::IfcInternalOrExternal_INTERNAL
-					);
-
-					boundaryList.emplace_back(boundary);
-				}
-			}
-
+			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList = findBoundary(unMovedUnitedScaledRoom, room, qProductList);
 			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			
 			for (size_t j = 0; j < boundaryList.size(); j++)
@@ -1128,9 +1017,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 		}
 	}
-
-
-	outputFieldToFile();
 
 	std::cout << std::endl;
 	std::cout << std::endl;
@@ -1155,14 +1041,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	floorProcessor::sortObjects(cluster->getHelper(roomLoc), roomProducts);
 
 	// apply connectivity data to the rooms
-	for (size_t i = 0; i < roomObjectList_.size(); i++)
-	{
-		roomObject* rObject = roomObjectList_[i];
-		auto connections = rObject->getConnections();
-		std::string description = "";
-		for (size_t i = 0; i <connections.size(); i++) { description = description + connections[i]->getSelf()->Name() + ", "; }
-		rObject->getSelf()->setDescription(rObject->getSelf()->Description() + description);
-	}
+	cluster->updateRoomCData(roomObjectList_);
 	createGraph(cluster);
 }
 	
