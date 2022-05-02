@@ -308,17 +308,17 @@ void voxelfield::outputFieldToFile()
 	{
 		std::vector<gp_Pnt> pointList = it->second->getCornerPoints(planeRotation_);
 
-		//if (it->second->getRoomNumbers().size() == 0) { continue; }
-		//if (!it->second->getIsInside()) { continue; }
-		if (!it->second->getIsIntersecting()) { continue; }
+		if (it->second->getRoomNumbers().size() == 0) { continue; }
+		if (!it->second->getIsInside()) { continue; }
+		if (it->second->getIsIntersecting()) { continue; }
 
 		for (size_t k = 0; k < pointList.size(); k++)
 		{
 			storageFile << pointList[k].X() << ", " << pointList[k].Y() << ", " << pointList[k].Z() << std::endl;
 		}
 
-		//storageFile << it->second->getRoomNumbers().back() << std::endl;
-		storageFile << "1" << std::endl;
+		storageFile << it->second->getRoomNumbers().back() << std::endl;
+		//storageFile << "1" << std::endl;
 
 		storageFile << "\n";
 	}
@@ -597,6 +597,10 @@ void voxelfield::makeRooms(helperCluster* cluster)
 		{
 			std::vector<int> totalRoom = growRoom(i, roomnum);
 			if (totalRoom.size() == 0) { continue; }
+
+			//roomnum++;
+
+			//continue; // TODO remove
 
 			//std::cout.flush();
 			std::cout << "Room nr: " << roomnum + 1 << "\r";
@@ -902,6 +906,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			// Make a space object
 			TopoDS_Shape UnitedScaledRoom = solids[BiggestRoom];
+			TopoDS_Shape unscaledRoom = solids[BiggestRoom];
 			if (unitScale != 1)
 			{
 				gp_Trsf UnitScaler;
@@ -999,7 +1004,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			);
 #endif // USE_IFC4
 
-			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList = findBoundary(unMovedUnitedScaledRoom, room, qProductList);
+			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList = findBoundary(unscaledRoom, room, qProductList);
 			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			
 			for (size_t j = 0; j < boundaryList.size(); j++)
@@ -1017,6 +1022,8 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 		}
 	}
+
+	outputFieldToFile();
 
 	std::cout << std::endl;
 	std::cout << std::endl;
