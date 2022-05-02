@@ -741,12 +741,14 @@ void voxelfield::makeRooms(helperCluster* cluster)
 					 if (std::get<3>(lookup))
 					{
 						shape = std::get<4>(lookup);
+						qProductList.emplace_back(std::make_tuple(qProduct, shape));
 					}
 					else {
 						shape = cluster->getHelper(j)->getObjectShape(std::get<0>(lookup), true);
+						qProductList.emplace_back(std::make_tuple(qProduct, cluster->getHelper(j)->getObjectShape(std::get<0>(lookup), false)));
 					}
 
-					qProductList.emplace_back(std::make_tuple(qProduct, cluster->getHelper(j)->getObjectShape(std::get<0>(lookup), false)));
+					
 
 					int sCount = 0;
 

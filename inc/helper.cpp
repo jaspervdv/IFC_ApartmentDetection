@@ -1074,6 +1074,8 @@ void helper::addObjectToIndex(T object) {
 	for (auto it = object->begin(); it != object->end(); ++it) {
 		IfcSchema::IfcProduct* product = *it;		
 
+
+
 		bg::model::box <BoostPoint3D> box = makeObjectBox(product);
 		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
@@ -1100,7 +1102,6 @@ void helper::addObjectToIndex(T object) {
 			BRepExtrema_DistShapeShape distanceMeasurer;
 			distanceMeasurer.LoadS1(shape);
 
-			bool matchFound = false;
 			IfcSchema::IfcProduct* matchingUntrimmedProduct;
 			TopoDS_Shape matchingUntrimmedShape;
 
@@ -1109,9 +1110,9 @@ void helper::addObjectToIndex(T object) {
 				LookupValue lookup = productLookup_[qResult[i].second];
 				IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
 
-				if (qProduct->data().type()->name() != "IfcWall" && 
+				if (qProduct->data().type()->name() != "IfcWall" &&
 					qProduct->data().type()->name() != "IfcWallStandardCase" &&
-					qProduct->data().type()->name() != "IfcRoof" && 
+					qProduct->data().type()->name() != "IfcRoof" &&
 					qProduct->data().type()->name() != "IfcSlab")
 				{
 					continue;
@@ -1133,103 +1134,104 @@ void helper::addObjectToIndex(T object) {
 					if (!distanceMeasurer.InnerSolution()) { continue; }
 					if (distance > 0.2) { continue; }
 
-					matchFound = true;
 					matchingUntrimmedProduct = qProduct;
 					matchingUntrimmedShape = qUntrimmedShape;
 
 					break;
 				}
-				if (matchFound) { break; }
 			}
 
 
-			if (!matchFound)
+			// if no void was found
+			// find longest horizontal and vertical edge
+			std::vector<gp_Pnt> pointList;
+			std::vector<gp_Pnt> horizontalMaxEdge;
+			std::vector<gp_Pnt> verticalMaxEdge;
+
+			double maxHDistance = 0;
+			double maxVDistance = 0;
+
+			TopExp_Explorer expl;
+			for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
 			{
-				// if no void was found
-				// find longest horizontal and vertical edge
-				std::vector<gp_Pnt> pointList;
-				std::vector<gp_Pnt> horizontalMaxEdge;
-				std::vector<gp_Pnt> verticalMaxEdge;
-
-				double maxHDistance = 0;
-				double maxVDistance = 0;
-
-				TopExp_Explorer expl;
-				for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
-				{
-					TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-					gp_Pnt p = BRep_Tool::Pnt(vertex);
-					pointList.emplace_back(p);
-				}
-
-				for (size_t i = 0; i < pointList.size(); i+=2)
-				{
-					gp_Pnt p1 = pointList[i];
-					gp_Pnt p2 = pointList[i + 1];
-
-					double vDistance = abs(p1.Z() - p2.Z());
-
-					if (maxVDistance < vDistance)
-					{
-						maxVDistance = vDistance;
-						verticalMaxEdge = { p1, p2 };
-					}
-
-					p1.SetZ(0);
-					p2.SetZ(0);
-
-					double hDistance = p1.Distance(p2);
-
-					if (hDistance > maxHDistance)
-					{
-						maxHDistance = hDistance;
-						horizontalMaxEdge = { p1, p2 };
-					}
-				}
-
-				// get rotation in xy plane
-				gp_Pnt bp(0, 0, 0);
-
-				double bpDistance0 = bp.Distance(horizontalMaxEdge[0]);
-				double bpDistance1 = bp.Distance(horizontalMaxEdge[1]);
-
-				if (bpDistance0 > bpDistance1)
-				{
-					std::reverse(horizontalMaxEdge.begin(), horizontalMaxEdge.end());
-				}
-
-				gp_Pnt p1 = horizontalMaxEdge[0];
-				gp_Pnt p2 = horizontalMaxEdge[1];
-
-				double angle = 0;
-
-				if (abs(p1.Y() - p2.Y()) > 0.00001)
-				{
-					double os = (p1.Y() - p2.Y()) / p1.Distance(p2);
-					angle = asin(os);
-				}
-
-				auto base = rotatedBBoxDiagonal(pointList, angle);
-				auto base2 = rotatedBBoxDiagonal(pointList, -angle);
-
-				gp_Pnt lllPoint = std::get<0>(base);
-				gp_Pnt urrPoint = std::get<1>(base);
-				double rot = angle;
-
-				if (lllPoint.Distance(urrPoint) > std::get<0>(base2).Distance(std::get<1>(base2)))
-				{
-					lllPoint = std::get<0>(base2);
-					urrPoint = std::get<1>(base2);
-
-					rot = -angle;
-				}				
-
-				hasCBBox = true;
-				cbbox = makeSolidBox(lllPoint, urrPoint, rot);
-
-				// TODO get rotation in z plane
-
+				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+				gp_Pnt p = BRep_Tool::Pnt(vertex);
+				pointList.emplace_back(p);
 			}
+
+			for (size_t i = 0; i < pointList.size(); i += 2)
+			{
+				gp_Pnt p1 = pointList[i];
+				gp_Pnt p2 = pointList[i + 1];
+
+				double vDistance = abs(p1.Z() - p2.Z());
+
+				if (maxVDistance < vDistance)
+				{
+					maxVDistance = vDistance;
+					verticalMaxEdge = { p1, p2 };
+				}
+
+				p1.SetZ(0);
+				p2.SetZ(0);
+
+				double hDistance = p1.Distance(p2);
+
+				if (hDistance > maxHDistance)
+				{
+					maxHDistance = hDistance;
+					horizontalMaxEdge = { p1, p2 };
+				}
+			}
+
+			// get rotation in xy plane
+			gp_Pnt bp(0, 0, 0);
+
+			double bpDistance0 = bp.Distance(horizontalMaxEdge[0]);
+			double bpDistance1 = bp.Distance(horizontalMaxEdge[1]);
+
+			if (bpDistance0 > bpDistance1)
+			{
+				std::reverse(horizontalMaxEdge.begin(), horizontalMaxEdge.end());
+			}
+
+			gp_Pnt p1 = horizontalMaxEdge[0];
+			gp_Pnt p2 = horizontalMaxEdge[1];
+
+			double angle = 0;
+
+			if (abs(p1.Y() - p2.Y()) > 0.00001)
+			{
+				double os = (p1.Y() - p2.Y()) / p1.Distance(p2);
+				angle = asin(os);
+			}
+
+			auto base = rotatedBBoxDiagonal(pointList, angle);
+			auto base2 = rotatedBBoxDiagonal(pointList, -angle);
+
+			gp_Pnt lllPoint = std::get<0>(base);
+			gp_Pnt urrPoint = std::get<1>(base);
+			double rot = angle;
+
+			if (lllPoint.Distance(urrPoint) > std::get<0>(base2).Distance(std::get<1>(base2)))
+			{
+				lllPoint = std::get<0>(base2);
+				urrPoint = std::get<1>(base2);
+
+				rot = -angle;
+			}
+
+			hasCBBox = true;
+			cbbox = makeSolidBox(lllPoint, urrPoint, rot);
+
+		if (product->data().id() == 31241)
+		{
+			std::cout << product->data().toString() << std::endl;
+			printPoint(box.max_corner());
+			printPoint(box.min_corner());
+		}
+
+			// TODO get rotation in z plane
 
 		}
 
@@ -2341,7 +2343,7 @@ void helperCluster::determineRoomBoundaries() {
 			TopoDS_Shape spaceShape = h->getObjectShape(currentSpace);
 			std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList;
 
-			auto base = rotatedBBoxDiagonal(h->getObjectPoints(spaceShape), 0);
+			auto base = rotatedBBoxDiagonal(h->getObjectPoints(spaceShape), originRot_);
 			BoostPoint3D boostlllpoint = Point3DOTB(std::get<0>(base));
 			BoostPoint3D boosturrpoint = Point3DOTB(std::get<1>(base));
 
@@ -2370,8 +2372,17 @@ void helperCluster::determineRoomBoundaries() {
 			{
 				LookupValue lookup = h->getLookup(qResult[k].second);
 				IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
+				TopoDS_Shape shape;
 
-				qProductList.emplace_back(std::make_tuple(qProduct, h->getObjectShape(std::get<0>(lookup), false)));
+				if (std::get<3>(lookup))
+				{
+					qProductList.emplace_back(std::make_tuple(qProduct, std::get<4>(lookup)));
+				}
+				else {
+					qProductList.emplace_back(std::make_tuple(qProduct, h->getObjectShape(std::get<0>(lookup), false)));
+				}
+
+
 			}
 
 			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList = findBoundary(spaceShape, currentSpace, qProductList);
