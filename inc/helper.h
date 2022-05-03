@@ -81,7 +81,8 @@ std::vector<std::vector<gp_Pnt>> triangulateShape(TopoDS_Shape* shape);
 double tVolume(gp_Pnt p, const std::vector<gp_Pnt> vertices);
 bool triangleIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_Pnt> triangle);
 
-std::vector<IfcSchema::IfcRelSpaceBoundary*> findBoundary(TopoDS_Shape roomShape, IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList);
+std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> checkConnection(TopoDS_Shape roomShape, IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList);
+std::vector<IfcSchema::IfcRelSpaceBoundary*> makeSpaceBoundary(IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList);
 
 class roomObject {
 private:
@@ -161,7 +162,7 @@ public:
 	std::vector<helper*> getHelpers() { return helperList; }
 
 	// updates the room data of every connectivity object
-	void updateConnections(TopoDS_Shape room, roomObject* rObject, std::vector<roomObject*> rObjectList, boost::geometry::model::box<BoostPoint3D> qBox);
+	void updateConnections(TopoDS_Shape room, roomObject* rObject, boost::geometry::model::box<BoostPoint3D> qBox, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> connectedObjects);
 	std::vector<roomObject*> createGraphData();
 	std::vector<roomObject*> createGraph(std::vector<roomObject*> rObjectList);
 	void writeGraph(std::string path, std::vector<roomObject*> rObjectList);

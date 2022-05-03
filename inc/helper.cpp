@@ -360,8 +360,7 @@ bool triangleIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_P
 	return false;
 }
 
-std::vector<IfcSchema::IfcRelSpaceBoundary*> findBoundary(TopoDS_Shape roomShape, IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList) {
-	
+std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> checkConnection(TopoDS_Shape roomShape, IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList) {
 	TopExp_Explorer expl;
 
 	// get rel space boundaries
@@ -370,6 +369,7 @@ std::vector<IfcSchema::IfcRelSpaceBoundary*> findBoundary(TopoDS_Shape roomShape
 
 	std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList;
 	std::vector<IfcSchema::IfcDoor*> connectedDoors; // TODO improve door implementation
+	std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> newqProductList;
 
 	for (size_t j = 0; j < qProductList.size(); j++)
 	{
@@ -460,20 +460,39 @@ std::vector<IfcSchema::IfcRelSpaceBoundary*> findBoundary(TopoDS_Shape roomShape
 		}
 		if (isConnected)
 		{
-			IfcSchema::IfcRelSpaceBoundary* boundary = new IfcSchema::IfcRelSpaceBoundary(
-				IfcParse::IfcGlobalId(),
-				0,
-				std::string(""),
-				std::string(""),
-				room,
-				qProduct->as<IfcSchema::IfcElement>(),
-				0,
-				IfcSchema::IfcPhysicalOrVirtualEnum::IfcPhysicalOrVirtual_PHYSICAL,
-				IfcSchema::IfcInternalOrExternalEnum::IfcInternalOrExternal_INTERNAL
-			);
-
-			boundaryList.emplace_back(boundary);
+			newqProductList.emplace_back(qProductList[j]);
 		}
+	}
+	return newqProductList;
+}
+
+
+std::vector<IfcSchema::IfcRelSpaceBoundary*> makeSpaceBoundary(IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList) {
+	
+	std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList;
+
+	for (size_t j = 0; j < qProductList.size(); j++)
+	{
+		bool isConnected = true;
+
+		// find objects that are close
+		IfcSchema::IfcProduct* qProduct = std::get<0>(qProductList[j]);
+
+
+		IfcSchema::IfcRelSpaceBoundary* boundary = new IfcSchema::IfcRelSpaceBoundary(
+			IfcParse::IfcGlobalId(),
+			0,
+			std::string(""),
+			std::string(""),
+			room,
+			qProduct->as<IfcSchema::IfcElement>(),
+			0,
+			IfcSchema::IfcPhysicalOrVirtualEnum::IfcPhysicalOrVirtual_PHYSICAL,
+			IfcSchema::IfcInternalOrExternalEnum::IfcInternalOrExternal_INTERNAL
+		);
+
+		boundaryList.emplace_back(boundary);
+
 	}
 	return boundaryList;
 }
@@ -1086,6 +1105,7 @@ void helper::addObjectToIndex(T object) {
 		TopoDS_Shape shape = getObjectShape(product);
 		TopoDS_Shape cbbox;
 		bool hasCBBox = false;
+		bool matchFound = false;
 
 		//TODO get shape
 
@@ -1101,6 +1121,7 @@ void helper::addObjectToIndex(T object) {
 
 			BRepExtrema_DistShapeShape distanceMeasurer;
 			distanceMeasurer.LoadS1(shape);
+
 
 			IfcSchema::IfcProduct* matchingUntrimmedProduct;
 			TopoDS_Shape matchingUntrimmedShape;
@@ -1134,6 +1155,7 @@ void helper::addObjectToIndex(T object) {
 					if (!distanceMeasurer.InnerSolution()) { continue; }
 					if (distance > 0.2) { continue; }
 
+					matchFound = true;
 					matchingUntrimmedProduct = qProduct;
 					matchingUntrimmedShape = qUntrimmedShape;
 
@@ -1141,99 +1163,92 @@ void helper::addObjectToIndex(T object) {
 				}
 			}
 
-
-			// if no void was found
+			if (!matchFound)
+			{
+				// if no void was found
 			// find longest horizontal and vertical edge
-			std::vector<gp_Pnt> pointList;
-			std::vector<gp_Pnt> horizontalMaxEdge;
-			std::vector<gp_Pnt> verticalMaxEdge;
+				std::vector<gp_Pnt> pointList;
+				std::vector<gp_Pnt> horizontalMaxEdge;
+				std::vector<gp_Pnt> verticalMaxEdge;
 
-			double maxHDistance = 0;
-			double maxVDistance = 0;
+				double maxHDistance = 0;
+				double maxVDistance = 0;
 
-			TopExp_Explorer expl;
-			for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
-			{
-				TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-				gp_Pnt p = BRep_Tool::Pnt(vertex);
-				pointList.emplace_back(p);
-			}
-
-			for (size_t i = 0; i < pointList.size(); i += 2)
-			{
-				gp_Pnt p1 = pointList[i];
-				gp_Pnt p2 = pointList[i + 1];
-
-				double vDistance = abs(p1.Z() - p2.Z());
-
-				if (maxVDistance < vDistance)
+				TopExp_Explorer expl;
+				for (expl.Init(shape, TopAbs_VERTEX); expl.More(); expl.Next())
 				{
-					maxVDistance = vDistance;
-					verticalMaxEdge = { p1, p2 };
+					TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
+					gp_Pnt p = BRep_Tool::Pnt(vertex);
+					pointList.emplace_back(p);
 				}
 
-				p1.SetZ(0);
-				p2.SetZ(0);
-
-				double hDistance = p1.Distance(p2);
-
-				if (hDistance > maxHDistance)
+				for (size_t i = 0; i < pointList.size(); i += 2)
 				{
-					maxHDistance = hDistance;
-					horizontalMaxEdge = { p1, p2 };
+					gp_Pnt p1 = pointList[i];
+					gp_Pnt p2 = pointList[i + 1];
+
+					double vDistance = abs(p1.Z() - p2.Z());
+
+					if (maxVDistance < vDistance)
+					{
+						maxVDistance = vDistance;
+						verticalMaxEdge = { p1, p2 };
+					}
+
+					p1.SetZ(0);
+					p2.SetZ(0);
+
+					double hDistance = p1.Distance(p2);
+
+					if (hDistance > maxHDistance)
+					{
+						maxHDistance = hDistance;
+						horizontalMaxEdge = { p1, p2 };
+					}
 				}
+
+				// get rotation in xy plane
+				gp_Pnt bp(0, 0, 0);
+
+				double bpDistance0 = bp.Distance(horizontalMaxEdge[0]);
+				double bpDistance1 = bp.Distance(horizontalMaxEdge[1]);
+
+				if (bpDistance0 > bpDistance1)
+				{
+					std::reverse(horizontalMaxEdge.begin(), horizontalMaxEdge.end());
+				}
+
+				gp_Pnt p1 = horizontalMaxEdge[0];
+				gp_Pnt p2 = horizontalMaxEdge[1];
+
+				double angle = 0;
+
+				if (abs(p1.Y() - p2.Y()) > 0.00001)
+				{
+					double os = (p1.Y() - p2.Y()) / p1.Distance(p2);
+					angle = asin(os);
+				}
+
+				auto base = rotatedBBoxDiagonal(pointList, angle);
+				auto base2 = rotatedBBoxDiagonal(pointList, -angle);
+
+				gp_Pnt lllPoint = std::get<0>(base);
+				gp_Pnt urrPoint = std::get<1>(base);
+				double rot = angle;
+
+				if (lllPoint.Distance(urrPoint) > std::get<0>(base2).Distance(std::get<1>(base2)))
+				{
+					lllPoint = std::get<0>(base2);
+					urrPoint = std::get<1>(base2);
+
+					rot = -angle;
+				}
+
+				hasCBBox = true;
+				cbbox = makeSolidBox(lllPoint, urrPoint, rot);
 			}
-
-			// get rotation in xy plane
-			gp_Pnt bp(0, 0, 0);
-
-			double bpDistance0 = bp.Distance(horizontalMaxEdge[0]);
-			double bpDistance1 = bp.Distance(horizontalMaxEdge[1]);
-
-			if (bpDistance0 > bpDistance1)
-			{
-				std::reverse(horizontalMaxEdge.begin(), horizontalMaxEdge.end());
-			}
-
-			gp_Pnt p1 = horizontalMaxEdge[0];
-			gp_Pnt p2 = horizontalMaxEdge[1];
-
-			double angle = 0;
-
-			if (abs(p1.Y() - p2.Y()) > 0.00001)
-			{
-				double os = (p1.Y() - p2.Y()) / p1.Distance(p2);
-				angle = asin(os);
-			}
-
-			auto base = rotatedBBoxDiagonal(pointList, angle);
-			auto base2 = rotatedBBoxDiagonal(pointList, -angle);
-
-			gp_Pnt lllPoint = std::get<0>(base);
-			gp_Pnt urrPoint = std::get<1>(base);
-			double rot = angle;
-
-			if (lllPoint.Distance(urrPoint) > std::get<0>(base2).Distance(std::get<1>(base2)))
-			{
-				lllPoint = std::get<0>(base2);
-				urrPoint = std::get<1>(base2);
-
-				rot = -angle;
-			}
-
-			hasCBBox = true;
-			cbbox = makeSolidBox(lllPoint, urrPoint, rot);
-
-		if (product->data().id() == 31241)
-		{
-			std::cout << product->data().toString() << std::endl;
-			printPoint(box.max_corner());
-			printPoint(box.min_corner());
 		}
 
-			// TODO get rotation in z plane
-
-		}
 
 		index_.insert(std::make_pair(box, (int)index_.size()));
 		std::vector<std::vector<gp_Pnt>> triangleMeshList = triangulateProduct(product);
@@ -1940,7 +1955,7 @@ void helperCluster::appendHelper(helper* data)
 	size_++;
 }
 
-void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, std::vector<roomObject*> rObjectList, boost::geometry::model::box<BoostPoint3D> qBox)
+void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, boost::geometry::model::box<BoostPoint3D> qBox, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> connectedObjects)
 {
 	int cSize = size_;
 
@@ -1949,6 +1964,16 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, st
 		if (!helperList[i]->hasClookup())
 		{
 			helperList[i]->indexConnectiveShapes();
+		}
+	}
+
+	std::vector<IfcSchema::IfcProduct*> connectedDoors;
+
+	for (size_t i = 0; i < connectedObjects.size(); i++)
+	{
+		if (std::get<0>(connectedObjects[i])->data().type()->name() == "IfcDoor")
+		{
+			connectedDoors.emplace_back(std::get<0>(connectedObjects[i]));
 		}
 	}
 
@@ -1972,58 +1997,29 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, st
 
 		for (size_t k = 0; k < qResult.size(); k++)
 		{
-
 			ConnectLookupValue lookup = helperList[j]->getCLookup(qResult[k].second);
-			TopoDS_Shape objectShape = helperList[j]->getObjectShape(std::get<0>(lookup));
+			
+			if (std::get<0>(lookup)->data().type()->name() == "IfcDoor") { 
 
-			if (std::get<0>(lookup)->data().type()->name() == "IfcDoor")
-			{
-				bool found = false;
-				gp_Pnt groundObjectPoint = std::get<1>(lookup)[0];
-
-				for (size_t l = 0; l < roomFootPrintList.size(); l++)
+				for (size_t i = 0; i < connectedDoors.size(); i++)
 				{
-					for (expl.Init(roomFootPrintList[l], TopAbs_EDGE); expl.More(); expl.Next())
+					IfcSchema::IfcProduct* qProduct = connectedDoors[i];
+					if (std::get<0>(lookup)->data().id() == qProduct->data().id())
 					{
-						TopoDS_Edge edge = TopoDS::Edge(expl.Current());
-						TopExp_Explorer edgeExpl;
-						std::vector<gp_Pnt> edgePoints;
-						edgePoints.clear();
+						doorCount++;
+						std::get<2>(lookup)->emplace_back(rObject);
 
-						for (edgeExpl.Init(edge, TopAbs_VERTEX); edgeExpl.More(); edgeExpl.Next()) {
-							TopoDS_Vertex vertex = TopoDS::Vertex(edgeExpl.Current());
-							edgePoints.emplace_back(BRep_Tool::Pnt(vertex));
-						}
-
-						if (edgePoints.size() != 2) { std::cout << "error" << std::endl; }
-
-						double baseDistance = edgePoints[0].Distance(edgePoints[1]);
-						double triDistance = edgePoints[0].Distance(groundObjectPoint) + edgePoints[1].Distance(groundObjectPoint);
-
-						double buffer = 0.3;
-
-						if (abs(baseDistance - triDistance) <= buffer)
+						if (std::get<2>(lookup)->size() == 2)
 						{
-							doorCount++;
-							std::get<2>(lookup)->emplace_back(rObject);
-
-							if (std::get<2>(lookup)->size() == 2)
-							{
-								std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
-								std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
-							}
-
-							found = true;
+							std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
+							std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
 						}
-						if (found)
-						{
-							break;
-						}
-					}
+						
+						break;
+					}					
 				}
-
-
 			}
+
 			if (std::get<0>(lookup)->data().type()->name() == "IfcStair") {
 
 				gp_Trsf stairOffset;
@@ -2098,15 +2094,21 @@ std::vector<roomObject*> helperCluster::createGraphData()
 	for (size_t i = 0; i < size_; i++)
 	{
 		helper* h = helperList[i];
+
+		if (!h->hasIndex())
+		{
+			h->indexGeo();
+		}
+
 		IfcSchema::IfcSpace::list::ptr spaceList =  h->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>();
 
 		for (auto it = spaceList->begin(); it != spaceList->end(); ++it) {
 
 			IfcSchema::IfcSpace* currentSpace = *it;
 			roomObject* rObject = new roomObject(currentSpace, roomObjectList.size());
-			roomObjectList.emplace_back(rObject);
 
 			TopoDS_Shape roomShape = h->getObjectShape(currentSpace);
+			std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList;
 
 			// compute the room volumes
 			GProp_GProps gprop;
@@ -2115,7 +2117,7 @@ std::vector<roomObject*> helperCluster::createGraphData()
 			double volume = gprop.Mass();
 			rObject->setArea(volume);
 
-			auto base = rotatedBBoxDiagonal(h->getObjectPoints(currentSpace), 0);
+			auto base = rotatedBBoxDiagonal(h->getObjectPoints(currentSpace), originRot_);
 			BoostPoint3D boostlllpoint = Point3DOTB(std::get<0>(base));
 			BoostPoint3D boosturrpoint = Point3DOTB(std::get<1>(base));
 
@@ -2133,7 +2135,31 @@ std::vector<roomObject*> helperCluster::createGraphData()
 
 			auto qBox = bg::model::box < BoostPoint3D >(scaledlllpoint, scaledurrpoint);
 
-			updateConnections(roomShape, rObject, roomObjectList, qBox);
+			std::vector<Value> qResult;
+
+			qResult.clear(); // no clue why, but avoids a random indexing issue that can occur
+			h->getIndexPointer()->query(bgi::intersects(qBox), std::back_inserter(qResult));
+
+			if (qResult.size() == 0) { continue; }
+
+			for (size_t k = 0; k < qResult.size(); k++)
+			{
+				LookupValue lookup = h->getLookup(qResult[k].second);
+				IfcSchema::IfcProduct* qProduct = std::get<0>(lookup);
+				TopoDS_Shape shape;
+
+				if (std::get<3>(lookup))
+				{
+					qProductList.emplace_back(std::make_tuple(qProduct, std::get<4>(lookup)));
+				}
+				else {
+					qProductList.emplace_back(std::make_tuple(qProduct, h->getObjectShape(std::get<0>(lookup), false)));
+				}
+			}
+
+			auto connectedObjects = checkConnection(roomShape, currentSpace, qProductList);
+			updateConnections(roomShape, rObject, qBox, connectedObjects);
+			roomObjectList.emplace_back(rObject);
 		}
 	}
 	return roomObjectList;
@@ -2329,16 +2355,34 @@ void helperCluster::determineRoomBoundaries() {
 	{
 		helper* h = helperList[i];
 
+		std::cout << "File " << i + 1 << " of " << size_ << std::endl;
+		IfcSchema::IfcSpace::list::ptr spaceList = (h->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>());
+
+		int spaceListSize = spaceList->size();
+
+		if (spaceListSize == 0)
+		{
+			std::cout << "No IfcSpace objects found" << std::endl;
+			continue;
+		}
+
 		if (!h->hasIndex())
 		{
 			h->indexGeo();
 		}
 
-		IfcSchema::IfcSpace::list::ptr spaceList = (h->getSourceFile()->instances_by_type<IfcSchema::IfcSpace>());
 
 		double scaler = 10;
 
+		std::cout << std::endl;
+
+		int counter = 0;
 		for (auto it = spaceList->begin(); it != spaceList->end(); ++it) {
+
+			std::cout.flush();
+			std::cout << counter << " of " << spaceListSize << "\r";
+			counter++;
+
 			IfcSchema::IfcSpace* currentSpace = *it;
 			TopoDS_Shape spaceShape = h->getObjectShape(currentSpace);
 			std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList;
@@ -2381,11 +2425,10 @@ void helperCluster::determineRoomBoundaries() {
 				else {
 					qProductList.emplace_back(std::make_tuple(qProduct, h->getObjectShape(std::get<0>(lookup), false)));
 				}
-
-
 			}
 
-			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList = findBoundary(spaceShape, currentSpace, qProductList);
+			auto connectedObjects = checkConnection(spaceShape, currentSpace, qProductList);
+			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList = makeSpaceBoundary(currentSpace, connectedObjects);
 
 			for (size_t j = 0; j < boundaryList.size(); j++)
 			{
@@ -2393,5 +2436,6 @@ void helperCluster::determineRoomBoundaries() {
 			}
 
 		}
+		std::cout << counter << " of " << spaceListSize << std::endl;
 	}
 }

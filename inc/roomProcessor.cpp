@@ -1006,7 +1006,8 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			);
 #endif // USE_IFC4
 
-			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList = findBoundary(unscaledRoom, room, qProductList);
+			auto connectedObjects = checkConnection(unscaledRoom, room, qProductList);
+			std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList = makeSpaceBoundary(room, connectedObjects);
 			cluster->getHelper(roomLoc)->getSourceFile()->addEntity(room);
 			
 			for (size_t j = 0; j < boundaryList.size(); j++)
@@ -1018,7 +1019,8 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			roomObject* rObject = new roomObject(room, roomObjectList_.size());
 			roomObjectList_.emplace_back(rObject);
-			cluster->updateConnections(unMovedUnitedScaledRoom, rObject, roomObjectList_, qBox);
+
+			cluster->updateConnections(unMovedUnitedScaledRoom, rObject, qBox, connectedObjects);
 			roomnum++;
 
 

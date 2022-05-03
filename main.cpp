@@ -48,7 +48,7 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/BIM_Projekt_Golden_Nugget-Architektur_und_Ingenieurbau.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/SampleProject_Villa_2_7_animatedTrees.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte 2.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte-2019.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte-2019-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/RAC_basic_sample_project_ifc4.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_ARC_DigitalHub.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_HZG_DigitalHub.ifc",
