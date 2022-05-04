@@ -888,10 +888,19 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 					if (!insideChecker.State())
 					{
+
 						BiggestRoom = j;
-						BRepGProp::VolumeProperties(solids[BiggestRoom], gprop);
-						double volume = gprop.Mass();
-						roomAreaList_.emplace_back(volume);
+						auto roomFootprint = getRoomFootprint(solids[BiggestRoom]);
+
+						double area = 0;
+						GProp_GProps gprop;
+						for (size_t j = 0; j < roomFootprint.size(); j++)
+						{
+							BRepGProp::SurfaceProperties(roomFootprint[j], gprop);
+							area += gprop.Mass();
+						}
+
+						roomAreaList_.emplace_back(area);
 						break;
 					}
 

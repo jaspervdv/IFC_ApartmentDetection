@@ -2124,12 +2124,18 @@ std::vector<roomObject*> helperCluster::createGraphData()
 			TopoDS_Shape roomShape = h->getObjectShape(currentSpace);
 			std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList;
 
-			// compute the room volumes
-			GProp_GProps gprop;
+			auto roomFootprint = getRoomFootprint(roomShape);
 
-			BRepGProp::VolumeProperties(roomShape, gprop);
-			double volume = gprop.Mass();
-			rObject->setArea(volume);
+			double area = 0;
+
+			GProp_GProps gprop;
+			for (size_t j = 0; j < roomFootprint.size(); j++)
+			{
+				BRepGProp::SurfaceProperties(roomFootprint[j], gprop);
+				area += gprop.Mass();
+			}
+
+			rObject->setArea(area);
 
 			auto base = rotatedBBoxDiagonal(h->getObjectPoints(currentSpace), originRot_);
 			BoostPoint3D boostlllpoint = Point3DOTB(std::get<0>(base));
@@ -2180,6 +2186,11 @@ std::vector<roomObject*> helperCluster::createGraphData()
 }
 
 std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rObjectList) {
+	// splitting variables
+	int hallwayNum = 6;
+	int minroom = 2;
+	double minArea = 32; //m2
+	
 	// update data to outside 
 	int cSize = size_;
 
@@ -2237,6 +2248,13 @@ std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rOb
 		bufferList.emplace_back(currentRoom);
 		currentRoom->setSNum(counter);
 
+		double totalAreaApartment = 0;
+
+		std::vector<roomObject*> waitingList;
+		std::vector<roomObject*> currentApp;
+		std::vector<roomObject*> recurseList;
+
+		// growing of an appartement
 		while (bufferList.size() > 0)
 		{
 			std::vector<roomObject*> tempBufferList;
@@ -2244,20 +2262,87 @@ std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rOb
 
 			for (size_t j = 0; j < bufferList.size(); j++)
 			{
-				std::vector<roomObject*> connections = bufferList[j]->getConnections();
+				roomObject* evaluatedRoom = bufferList[j];
+				std::vector<roomObject*> connections = evaluatedRoom->getConnections();
+
+				if (connections.size() >= hallwayNum)
+				{
+					waitingList.emplace_back(evaluatedRoom);
+					continue;
+				}
+				currentApp.emplace_back(evaluatedRoom);
+
+				totalAreaApartment += evaluatedRoom->getArea();
+
 				for (size_t k = 0; k < connections.size(); k++)
 				{
 					if (connections[k]->getSNum() == -1 && connections[k]->isInside())
 					{
+						
 						connections[k]->setSNum(counter);
 						tempBufferList.emplace_back(connections[k]);
 					}
+					else if (connections[k]->getSNum() >= 0 && connections[k]->getSNum() != counter)
+					{
+						recurseList.emplace_back(connections[k]);
+					}
 				}
 			}
+
+			if (tempBufferList.size() == 0)
+			{
+				if (totalAreaApartment < minArea ||
+					currentApp.size() < minroom)
+				{
+					for (size_t j = 0; j < waitingList.size(); j++)
+					{
+						roomObject* evaluatedRoom = waitingList[j];
+						currentApp.emplace_back(evaluatedRoom);
+						totalAreaApartment += evaluatedRoom->getArea();
+						std::vector<roomObject*> connections = evaluatedRoom->getConnections();
+
+						for (size_t k = 0; k < connections.size(); k++)
+						{
+							if (connections[k]->getSNum() == -1 && connections[k]->isInside())
+							{
+								connections[k]->setSNum(counter);
+								tempBufferList.emplace_back(connections[k]);
+							}
+							else if (connections[k]->getSNum() >= 0 && connections[k]->getSNum() != counter)
+							{
+								recurseList.emplace_back(connections[k]);
+							}
+						}
+					}
+				}
+				else if (totalAreaApartment > minArea)
+				{
+					for (size_t j = 0; j < waitingList.size(); j++)
+					{
+						waitingList[j]->setSNum(-1);
+					}
+				}
+				waitingList.clear();
+			}
+
+			if (tempBufferList.size() == 0)
+			{
+				if (recurseList.size() != 0) {
+					for (size_t j = 0; j < currentApp.size(); j++)
+					{
+						currentApp[j]->setSNum(recurseList[0]->getSNum());
+					}
+				}
+				recurseList.clear();
+			}
+
+			
 			bufferList.clear();
 			bufferList = tempBufferList;
 		}
+		currentApp.clear();
 		counter++;
+		totalAreaApartment = 0;
 	}
 	return rObjectList;
 }
