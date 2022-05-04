@@ -2041,18 +2041,6 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, bo
 				gp_Pnt groundObjectPointHigh = groundObjectPoint;
 				groundObjectPointHigh.SetZ(groundObjectPoint.Z() + 1000);
 
-				if (rObject->getSelf()->Name() == "136")
-				{
-					std::cout << std::get<0>(lookup)->data().toString() << std::endl;
-
-					printPoint(groundObjectPoint);
-					printPoint(groundObjectPointHigh);
-					std::cout << std::endl;
-					std::cout << std::endl;
-					std::cout << std::endl;
-
-				}
-
 				std::vector<gp_Pnt> lowLine = { groundObjectPoint,  groundObjectPointHigh };
 				auto faceTriangles = triangulateShape(&room);
 
@@ -2081,16 +2069,6 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, bo
 				topObjectPoint.SetZ(topObjectPoint.Z() + .5);
 				gp_Pnt topObjectPointHigh = topObjectPoint;
 				topObjectPointHigh.SetZ(topObjectPoint.Z() + 1000);
-
-				if (rObject->getSelf()->Name() == "136")
-				{
-					printPoint(groundObjectPoint);
-					printPoint(groundObjectPointHigh);
-					std::cout << std::endl;
-					std::cout << std::endl;
-					std::cout << std::endl;
-
-				}
 
 				std::vector<gp_Pnt> highLine = { topObjectPoint,  topObjectPointHigh };
 
@@ -2168,9 +2146,6 @@ std::vector<roomObject*> helperCluster::createGraphData()
 			bg::transform(boosturrpoint, scaledurrpoint, translate);
 			boost::geometry::strategy::transform::translate_transformer<double, 3, 3> translate2(-dx, -dy, -2 * dz);
 			bg::transform(boostlllpoint, scaledlllpoint, translate2);
-
-			printPoint(scaledurrpoint);
-			printPoint(scaledlllpoint);
 
 			auto qBox = bg::model::box < BoostPoint3D >(scaledlllpoint, scaledurrpoint);
 

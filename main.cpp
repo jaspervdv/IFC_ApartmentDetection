@@ -38,7 +38,7 @@ std::vector<std::string> GetSources() {
 
 	// TODO replace with file open prompt
 	std::vector<std::string> sourcePathArray = {
-	"D:/Documents/Uni/Thesis/sources/Models/apartment_tests/large-hallway-1room.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/apartment_tests/large-hallway-1room.ifc"
 
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/BIM_Projekt_Golden_Nugget-Architektur_und_Ingenieurbau.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/SampleProject_Villa_2_7_animatedTrees.ifc"
@@ -54,7 +54,7 @@ std::vector<std::string> GetSources() {
 	 
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	 
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",
