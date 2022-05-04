@@ -1260,9 +1260,12 @@ void helper::addObjectToIndex(T object) {
 template <typename T>
 void helper::addObjectToCIndex(T object) {
 	// add doors to the rtree (for the appartment detection)
-	for (auto it = object->begin(); it != object->end(); ++it) {
 
+	std::map < int, int >  processed;
+
+	for (auto it = object->begin(); it != object->end(); ++it) {
 		IfcSchema::IfcProduct* product = *it;
+
 		std::vector<IfcSchema::IfcProduct*> productList = getNestedProducts(product);
 
 		bg::model::box <BoostPoint3D> box = makeObjectBox(productList);
@@ -1957,6 +1960,16 @@ void helperCluster::appendHelper(helper* data)
 
 void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, boost::geometry::model::box<BoostPoint3D> qBox, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> connectedObjects)
 {
+	if (rObject->getSelf()->Name() == "136")
+	{
+		printFaces(room);
+		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << std::endl;
+
+	}
+
+
 	int cSize = size_;
 
 	for (size_t i = 0; i < cSize; i++)
@@ -2021,13 +2034,24 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, bo
 			}
 
 			if (std::get<0>(lookup)->data().type()->name() == "IfcStair") {
-
 				gp_Trsf stairOffset;
 
 				gp_Pnt groundObjectPoint = std::get<1>(lookup)[0];
 				groundObjectPoint.SetZ(groundObjectPoint.Z() + 0.5);
 				gp_Pnt groundObjectPointHigh = groundObjectPoint;
 				groundObjectPointHigh.SetZ(groundObjectPoint.Z() + 1000);
+
+				if (rObject->getSelf()->Name() == "136")
+				{
+					std::cout << std::get<0>(lookup)->data().toString() << std::endl;
+
+					printPoint(groundObjectPoint);
+					printPoint(groundObjectPointHigh);
+					std::cout << std::endl;
+					std::cout << std::endl;
+					std::cout << std::endl;
+
+				}
 
 				std::vector<gp_Pnt> lowLine = { groundObjectPoint,  groundObjectPointHigh };
 				auto faceTriangles = triangulateShape(&room);
@@ -2054,8 +2078,19 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, bo
 				}
 
 				gp_Pnt topObjectPoint = std::get<1>(lookup)[1];
+				topObjectPoint.SetZ(topObjectPoint.Z() + .5);
 				gp_Pnt topObjectPointHigh = topObjectPoint;
 				topObjectPointHigh.SetZ(topObjectPoint.Z() + 1000);
+
+				if (rObject->getSelf()->Name() == "136")
+				{
+					printPoint(groundObjectPoint);
+					printPoint(groundObjectPointHigh);
+					std::cout << std::endl;
+					std::cout << std::endl;
+					std::cout << std::endl;
+
+				}
 
 				std::vector<gp_Pnt> highLine = { topObjectPoint,  topObjectPointHigh };
 
@@ -2081,6 +2116,7 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, bo
 			}
 		}
 	}
+
 	rObject->getSelf()->setDescription("Has " + std::to_string(doorCount) + " unique doors and " + std::to_string(stairCount) + " unique stairs. Connected to : ");
 }
 
@@ -2128,10 +2164,13 @@ std::vector<roomObject*> helperCluster::createGraphData()
 			BoostPoint3D scaledlllpoint;
 			BoostPoint3D scaledurrpoint;
 
-			boost::geometry::strategy::transform::translate_transformer<double, 3, 3> translate(dx, dy, dz);
+			boost::geometry::strategy::transform::translate_transformer<double, 3, 3> translate(dx, dy, 2 * dz);
 			bg::transform(boosturrpoint, scaledurrpoint, translate);
-			boost::geometry::strategy::transform::translate_transformer<double, 3, 3> translate2(-dx, -dy, -dz);
+			boost::geometry::strategy::transform::translate_transformer<double, 3, 3> translate2(-dx, -dy, -2 * dz);
 			bg::transform(boostlllpoint, scaledlllpoint, translate2);
+
+			printPoint(scaledurrpoint);
+			printPoint(scaledlllpoint);
 
 			auto qBox = bg::model::box < BoostPoint3D >(scaledlllpoint, scaledurrpoint);
 

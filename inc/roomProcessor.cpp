@@ -960,7 +960,8 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			{
 				BRepClass3d_SolidClassifier insideChecker;
 				std::vector<gp_Pnt> centerPoints = cluster->getHelper(j)->getRoomCenters();
-				insideChecker.Load(unMovedUnitedScaledRoom);
+				
+				insideChecker.Load(unscaledRoom);
 
 				for (size_t k = 0; k < centerPoints.size(); k++)
 				{
