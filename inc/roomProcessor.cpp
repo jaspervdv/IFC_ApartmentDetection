@@ -920,7 +920,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			aSplitter.SetArguments(aLSObjects);
 			aSplitter.SetTools(aLSTools);
 			aSplitter.SetRunParallel(Standard_True);
-			aSplitter.SetFuzzyValue(0.001);
+			//aSplitter.SetFuzzyValue(0.001);
 			aSplitter.SetNonDestructive(Standard_True);
 
 			aSplitter.Perform();
