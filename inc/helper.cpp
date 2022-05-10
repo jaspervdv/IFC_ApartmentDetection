@@ -570,6 +570,7 @@ std::vector<gp_Pnt> helper::getAllPoints(IfcSchema::IfcProduct::list::ptr produc
 		if (product->data().type()->name() == "IfcAnnotation") { continue; } // find points another way
 		if (product->data().type()->name() == "IfcSite") { continue; }
 		if (product->data().type()->name() == "IfcBuildingElementProxy") { continue; }
+		if (product->data().type()->name() == "IfcFastener") { continue; }
 
 		std::vector<gp_Pnt> temp = getObjectPoints(product);
 
@@ -684,6 +685,7 @@ void helper::internalizeGeo()
 	IfcSchema::IfcProduct::list::ptr products = file_->instances_by_type<IfcSchema::IfcProduct>();
 
 	std::vector<gp_Pnt> pointList = getAllPoints(products);
+
 
 	// approximate smalles bbox
 	double angle = 22.5 * (M_PI / 180);
@@ -1453,6 +1455,12 @@ std::vector<TopoDS_Face> helper::getObjectFaces(IfcSchema::IfcProduct* product, 
 
 TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjusted)
 {
+	if (product->data().type()->name() == "IfcFastener")
+	{
+		return {};
+	}
+
+
 	// filter with lookup
 	if (product->data().type()->name() != "IfcWall" &&
 		product->data().type()->name() != "IfcWallStandardCase" &&
@@ -1960,15 +1968,6 @@ void helperCluster::appendHelper(helper* data)
 
 void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, boost::geometry::model::box<BoostPoint3D> qBox, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> connectedObjects)
 {
-	if (rObject->getSelf()->Name() == "136")
-	{
-		printFaces(room);
-		std::cout << std::endl;
-		std::cout << std::endl;
-		std::cout << std::endl;
-
-	}
-
 
 	int cSize = size_;
 
@@ -2094,7 +2093,7 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, bo
 			}
 		}
 	}
-
+	rObject->setDoorCount(doorCount);
 	rObject->getSelf()->setDescription("Has " + std::to_string(doorCount) + " unique doors and " + std::to_string(stairCount) + " unique stairs. Connected to : ");
 }
 
@@ -2265,7 +2264,7 @@ std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rOb
 				roomObject* evaluatedRoom = bufferList[j];
 				std::vector<roomObject*> connections = evaluatedRoom->getConnections();
 
-				if (connections.size() >= hallwayNum)
+				if (evaluatedRoom->getDoorCount() >= hallwayNum)
 				{
 					waitingList.emplace_back(evaluatedRoom);
 					continue;
@@ -2344,6 +2343,18 @@ std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rOb
 		counter++;
 		totalAreaApartment = 0;
 	}
+
+	for (size_t i = 0; i < rObjectList.size(); i++)
+	{
+		roomObject* currentRoom = rObjectList[i];
+		if (currentRoom->isInside())
+		{
+			currentRoom->getSelf()->setDescription(currentRoom->getSelf()->Description() + "apartment: " + std::to_string(currentRoom->getSNum()));
+		}
+
+	}
+
+
 	return rObjectList;
 }
 

@@ -2,6 +2,11 @@
 
 
 void voxelfield::createGraph(helperCluster* cluster) {
+	// splitting variables
+	int hallwayNum = 6;
+	int minroom = 2;
+	double minArea = 32; //m2
+
 	// update data to outside 
 	int cSize = cluster->getSize();
 
@@ -14,15 +19,14 @@ void voxelfield::createGraph(helperCluster* cluster) {
 
 	for (size_t i = 0; i < cSize; i++)
 	{
-		std::vector<ConnectLookupValue> lookup = cluster->getHelper(i)->getFullClookup();
-
+		std::vector<ConnectLookupValue> lookup =  cluster->getHelper(i)->getFullClookup();
 
 		for (size_t j = 0; j < lookup.size(); j++)
 		{
 			if (std::get<2>(lookup[j])->size() == 1)
 			{
 				std::vector<gp_Pnt> doorPointList = cluster->getHelper(i)->getObjectPoints(std::get<0>(lookup[j]));
-				
+
 				double lowZ = 99999999999;
 				for (size_t k = 0; k < doorPointList.size(); k++)
 				{
@@ -30,7 +34,7 @@ void voxelfield::createGraph(helperCluster* cluster) {
 					if (pZ < lowZ) { lowZ = pZ; }
 				}
 
-				if (lowZ < 2 && lowZ > - 0.5) //TODO door height needs to be smarter
+				if (lowZ < 2 && lowZ > -0.5) //TODO door height needs to be smarter
 				{
 					std::get<2>(lookup[j])[0][0]->addConnection(outsideObject);
 				}
@@ -38,7 +42,7 @@ void voxelfield::createGraph(helperCluster* cluster) {
 			}
 		}
 	}
-
+	 
 	// Make sections
 	int counter = 0;
 
@@ -46,20 +50,27 @@ void voxelfield::createGraph(helperCluster* cluster) {
 
 	for (size_t i = 0; i < roomObjectList_.size(); i++)
 	{
-
 		roomObject* currentRoom = roomObjectList_[i];
 
 		if (!currentRoom->isInside())
 		{
 			currentRoom->setSNum(-2);
 			continue;
-		} 
+		}
+
 		if (currentRoom->getConnections().size() != 1) { continue; } // always start isolated
 		if (currentRoom->getSNum() != -1) { continue; }
 
 		bufferList.emplace_back(currentRoom);
 		currentRoom->setSNum(counter);
 
+		double totalAreaApartment = 0;
+
+		std::vector<roomObject*> waitingList;
+		std::vector<roomObject*> currentApp;
+		std::vector<roomObject*> recurseList;
+
+		// growing of an appartement
 		while (bufferList.size() > 0)
 		{
 			std::vector<roomObject*> tempBufferList;
@@ -67,21 +78,99 @@ void voxelfield::createGraph(helperCluster* cluster) {
 
 			for (size_t j = 0; j < bufferList.size(); j++)
 			{
-				std::vector<roomObject*> connections = bufferList[j]->getConnections();
+				roomObject* evaluatedRoom = bufferList[j];
+				std::vector<roomObject*> connections = evaluatedRoom->getConnections();
+
+				if (evaluatedRoom->getDoorCount() >= hallwayNum)
+				{
+					waitingList.emplace_back(evaluatedRoom);
+					continue;
+				}
+				currentApp.emplace_back(evaluatedRoom);
+
+				totalAreaApartment += evaluatedRoom->getArea();
+
 				for (size_t k = 0; k < connections.size(); k++)
 				{
-					if (connections[k]->getSNum() == - 1 && connections[k]->isInside())
+					if (connections[k]->getSNum() == -1 && connections[k]->isInside())
 					{
+
 						connections[k]->setSNum(counter);
 						tempBufferList.emplace_back(connections[k]);
 					}
+					else if (connections[k]->getSNum() >= 0 && connections[k]->getSNum() != counter)
+					{
+						recurseList.emplace_back(connections[k]);
+					}
 				}
 			}
+
+			if (tempBufferList.size() == 0)
+			{
+				if (totalAreaApartment < minArea ||
+					currentApp.size() < minroom)
+				{
+					for (size_t j = 0; j < waitingList.size(); j++)
+					{
+						roomObject* evaluatedRoom = waitingList[j];
+						currentApp.emplace_back(evaluatedRoom);
+						totalAreaApartment += evaluatedRoom->getArea();
+						std::vector<roomObject*> connections = evaluatedRoom->getConnections();
+
+						for (size_t k = 0; k < connections.size(); k++)
+						{
+							if (connections[k]->getSNum() == -1 && connections[k]->isInside())
+							{
+								connections[k]->setSNum(counter);
+								tempBufferList.emplace_back(connections[k]);
+							}
+							else if (connections[k]->getSNum() >= 0 && connections[k]->getSNum() != counter)
+							{
+								recurseList.emplace_back(connections[k]);
+							}
+						}
+					}
+				}
+				else if (totalAreaApartment > minArea)
+				{
+					for (size_t j = 0; j < waitingList.size(); j++)
+					{
+						waitingList[j]->setSNum(-1);
+					}
+				}
+				waitingList.clear();
+			}
+
+			if (tempBufferList.size() == 0)
+			{
+				if (recurseList.size() != 0) {
+					for (size_t j = 0; j < currentApp.size(); j++)
+					{
+						currentApp[j]->setSNum(recurseList[0]->getSNum());
+					}
+				}
+				recurseList.clear();
+			}
+
+
 			bufferList.clear();
 			bufferList = tempBufferList;
 		}
+		currentApp.clear();
 		counter++;
+		totalAreaApartment = 0;
 	}
+
+	for (size_t i = 0; i < roomObjectList_.size(); i++)
+	{
+		roomObject* currentRoom = roomObjectList_[i];
+		if (currentRoom->isInside())
+		{
+			currentRoom->getSelf()->setDescription(currentRoom->getSelf()->Description() + "apartment: " + std::to_string(currentRoom->getSNum()));
+		}
+
+	}
+
 }
 
 
@@ -831,7 +920,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			aSplitter.SetArguments(aLSObjects);
 			aSplitter.SetTools(aLSTools);
 			aSplitter.SetRunParallel(Standard_True);
-			//aSplitter.SetFuzzyValue(0.001);
+			aSplitter.SetFuzzyValue(0.001);
 			aSplitter.SetNonDestructive(Standard_True);
 
 			aSplitter.Perform();

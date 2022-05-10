@@ -716,6 +716,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 
 	double topBuffer = 0.2;
 
+
 	for (auto it = products->begin(); it != products->end(); ++it)
 	{
 		IfcSchema::IfcProduct* product = *it;

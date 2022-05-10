@@ -88,6 +88,7 @@ class roomObject {
 private:
 	IfcSchema::IfcSpace* self_;
 	std::vector<roomObject*> connections_;
+	int doorCount_;
 	gp_Pnt point_;
 	int indexNum_;
 	int sectionNum_ = -1;
@@ -110,6 +111,8 @@ public:
 
 	void setArea(double i) { area_ = i; }
 
+	void setDoorCount(int i) { doorCount_ = i; }
+
 	IfcSchema::IfcSpace* getSelf() { return self_; }
 
 	const std::vector<roomObject*> getConnections() { return connections_; }
@@ -125,6 +128,8 @@ public:
 	bool isInside() { return isInside_; }
 
 	double getArea() { return area_; }
+
+	int getDoorCount() { return doorCount_; }
 
 };
 
