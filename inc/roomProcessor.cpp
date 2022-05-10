@@ -989,7 +989,16 @@ void voxelfield::makeRooms(helperCluster* cluster)
 							area += gprop.Mass();
 						}
 
-						roomAreaList_.emplace_back(area);
+						if (area == 0)
+						{
+							roomAreaList_.emplace_back(50);
+						}
+						else
+						{
+							roomAreaList_.emplace_back(area);
+						}
+
+
 						break;
 					}
 
@@ -1118,7 +1127,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 			roomObject* rObject = new roomObject(room, roomObjectList_.size());
 			roomObjectList_.emplace_back(rObject);
-
 			cluster->updateConnections(unMovedUnitedScaledRoom, rObject, qBox, connectedObjects);
 			roomnum++;
 

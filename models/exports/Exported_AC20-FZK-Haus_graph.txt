@@ -1,0 +1,39 @@
+_pointList_
+5, 5, 0
+0, 0, 0
+1, 1, 0
+2, 2, 0
+3, 3, 0
+4, 4, 0
+_name_
+Outside
+Wohnen (Flur & Küche)
+Schlafzimmer
+Buero
+Bad
+Galerie
+_area_
+100
+53.8254
+22.0725
+12.985
+12.5027
+50
+_connection_
+1, 2
+1, 3
+1, 4
+1, 5
+1, 0
+1, 0
+2, 1
+3, 1
+4, 1
+5, 1
+_sections_
+-2
+0
+0
+0
+0
+0
