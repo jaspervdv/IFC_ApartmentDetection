@@ -84,6 +84,9 @@ bool triangleIntersecting(const std::vector<gp_Pnt> line, const std::vector<gp_P
 std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> checkConnection(TopoDS_Shape roomShape, IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList);
 std::vector<IfcSchema::IfcRelSpaceBoundary*> makeSpaceBoundary(IfcSchema::IfcSpace* room, std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> qProductList);
 
+// finds the ifc schema that is used in the supplied file
+bool findSchema(std::string path, bool quiet = false);
+
 class roomObject {
 private:
 	IfcSchema::IfcSpace* self_;
@@ -219,9 +222,6 @@ private:
 
 	std::map < int, TopoDS_Shape > shapeLookup_;
 	std::map < int, TopoDS_Shape > adjustedshapeLookup_;
-
-	// finds the ifc schema that is used in the supplied file
-	void findSchema(std::string path);
 
 	// sets the unit multipliers to allow for the use of other units than metres
 	void setUnits(IfcParse::IfcFile* file);

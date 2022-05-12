@@ -36,14 +36,14 @@
 
 std::vector<std::string> GetSources() {
 
-	// TODO replace with file open prompt
+	// easy override 
 	std::vector<std::string> sourcePathArray = {
 	//"D:/Documents/Uni/Thesis/sources/Models/apartment_tests/large-hallway-1room.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/apartment_tests/large-hallway-2room.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/apartment_tests/large-smallhallway-1room.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/apartment_tests/large-smallhallway-2room.ifc"
 
-	"D:/Documents/Uni/Thesis/sources/Models/simple_models/BIM_Projekt_Golden_Nugget-Architektur_und_Ingenieurbau.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/BIM_Projekt_Golden_Nugget-Architektur_und_Ingenieurbau.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/SampleProject_Villa_2_7_animatedTrees.ifc"
 	
 	//"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte 2.ifc"
@@ -66,6 +66,75 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gebouw_rv19_p.v.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/160035-Boompjes_TVA_gevel_rv19_p.v.ifc"
 	};
+
+	// if no override is found use normal interface
+	while (true)
+	{
+		if (sourcePathArray.size() == 0)
+		{
+			std::cout << "Enter filepath of the IFC file" << std::endl;
+			std::cout << "[INFO] If multifile seperate by enter" << std::endl;
+			std::cout << "[INFO] Finish by empty line + enter" << std::endl;
+
+			while (true)
+			{
+				std::cout << "Path: ";
+
+				std::string singlepath = "";
+				getline(std::cin, singlepath);
+
+				if (singlepath.size() == 0 && sourcePathArray.size() == 0)
+				{
+					std::cout << "[INFO] No filepath has been supplied" << std::endl;
+					std::cout << "Enter filepath of the IFC file (if multiplefile sperate path with enter):" << std::endl;
+					continue;
+				}
+				else if (singlepath.size() == 0)
+				{
+					break;
+				}
+
+				sourcePathArray.emplace_back(singlepath);
+			}
+		}
+
+		bool hasError = false;
+
+		for (size_t i = 0; i < sourcePathArray.size(); i++)
+		{
+			std::string currentPath = sourcePathArray[i];
+
+			if (currentPath.size() <= 4 )
+			{
+				if (!hasError) { std::cout << "[ERROR] Invalid IFC file found!" << std::endl; }
+				std::cout << "[INFO] Invalid file: " + currentPath << std::endl;
+				hasError = true;
+				break;
+			}
+			else if (currentPath.substr(sourcePathArray[i].length() - 4) != ".ifc") {
+				if (!hasError) { std::cout << "[ERROR] Invalid IFC file found!" << std::endl; }
+				std::cout << "[INFO] Invalid file: " + currentPath << std::endl;
+				hasError = true;
+				break;
+			}
+			else if (!findSchema(currentPath, true))
+			{
+				if (!hasError) { std::cout << "[ERROR] Invalid IFC file found!" << std::endl; }
+				std::cout << "[INFO] Invalid file: " + currentPath << std::endl;
+				hasError = true;
+				break;
+			}
+		}
+
+		std::cout << std::endl;
+
+		if (!hasError)
+		{
+			break;
+		}
+
+		sourcePathArray.clear();
+	}
 
 	return sourcePathArray;
 }
@@ -113,8 +182,6 @@ bool yesNoQuestion() {
 
 int main(int argc, char** argv) {
 
-
-
 	// outputs errors related to the selected objects
 	if (false) { Logger::SetOutput(&std::cout, &std::cout); }
 
@@ -139,8 +206,6 @@ int main(int argc, char** argv) {
 		exportPath += "exports/Exported_" + segments[segments.size() - 1];
 		exportPathArray.emplace_back(exportPath);
 	}
-
-
 
 	int constructionIndx = -1;
 
@@ -198,7 +263,7 @@ int main(int argc, char** argv) {
 		}
 		else { h->setIsConstruct(true); }
 		if (!h->hasSetUnits()) { return 0; }
-		h->setName(fileNames[i]);		
+		h->setName(fileNames[i]);
 
 		hCluster->appendHelper(h);
 	}

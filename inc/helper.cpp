@@ -499,7 +499,7 @@ std::vector<IfcSchema::IfcRelSpaceBoundary*> makeSpaceBoundary(IfcSchema::IfcSpa
 
 helper::helper(std::string path) {
 
-	helper::findSchema(path);
+	findSchema(path);
 
 	IfcParse::IfcFile*  sourceFile = new IfcParse::IfcFile(path);
 
@@ -522,39 +522,58 @@ helper::helper(std::string path) {
 }
 
 
-void helper::findSchema(std::string path) {
+bool findSchema(std::string path, bool quiet) {
 	std::ifstream infile(path);
 	std::string line;
 
 	while (std::getline(infile, line))
 	{
 		if (line[0] == '#') {
-			std::cout << "[Warning] No valid ifc scheme found" << std::endl;
-			break; 
+			if (!quiet)
+			{
+				std::cout << "[Warning] No valid ifc scheme found" << std::endl;
+			}
+			infile.close();
+			return false; 
 		}
-
 		if (line.find("FILE_SCHEMA(('IFC4'))") != std::string::npos) {
-			std::cout << "Valid scheme found: IFC4" << std::endl;
+			if (!quiet)
+			{
+				std::cout << "Valid scheme found: IFC4" << std::endl;
+			}
 			break;
 		}
 		else if (line.find("FILE_SCHEMA(('IFC2X3'))") != std::string::npos) {
-			std::cout << "Valid scheme found: IFC2X3" << std::endl;
+			if (!quiet)
+			{
+				std::cout << "Valid scheme found: IFC2X3" << std::endl;
+			}
 			break;
 		}
 		else if (line.find("FILE_SCHEMA(('IFC4x1'))") != std::string::npos) {
-			std::cout << "Valid scheme found: IFC4x1" << std::endl;
+			if (!quiet)
+			{
+				std::cout << "Valid scheme found: IFC4x1" << std::endl;
+			}
 			break;
 		}
 		else if (line.find("FILE_SCHEMA(('IFC4x2'))") != std::string::npos) {
-			std::cout << "Valid scheme found: IFC4x2" << std::endl;
+			if (!quiet)
+			{
+				std::cout << "Valid scheme found: IFC4x2" << std::endl;
+			}
 			break;
 		}
 		else if (line.find("FILE_SCHEMA(('IFC4x3'))") != std::string::npos) {
-			std::cout << "Valid scheme found: IFC4x3" << std::endl;
+			if (!quiet)
+			{
+				std::cout << "Valid scheme found: IFC4x3" << std::endl;
+			}	
 			break;
 		}
 	}
 	infile.close();
+	return true;
 }
 
 
