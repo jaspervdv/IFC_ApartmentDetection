@@ -566,7 +566,18 @@ void floorProcessor::processStoreys(std::vector<helper*> data, std::vector<doubl
 		{
 			if (data[i]->getIsConstruct())
 			{
-				storeys = data[i]->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
+
+				// the storey container has to be emptied
+				IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = data[i]->getSourceFile()->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
+				std::vector<std::tuple<double, IfcSchema::IfcRelContainedInSpatialStructure*>> pairedContainers;
+				for (auto it = containers->begin(); it != containers->end(); ++it)
+				{
+					IfcSchema::IfcRelContainedInSpatialStructure* structure = *it;
+					if (structure->RelatingStructure()->data().type()->name() != "IfcBuildingStorey") { continue; }
+					boost::shared_ptr<IfcSchema::IfcProduct::list> list(new IfcSchema::IfcProduct::list);
+					structure->setRelatedElements(list);
+				}
+
 				floorProcessor::sortObjects(data[i]);
 			}
 			else
@@ -596,7 +607,6 @@ void floorProcessor::cleanStoreys(helper* data)
 		if (container->RelatingStructure()->data().type()->name() != "IfcBuildingStorey") { continue; }
 		data->getSourceFile()->removeEntity(container);
 	}
-
 
 	// remove the storey object
 	IfcSchema::IfcBuildingStorey::list::ptr oldStoreys = data->getSourceFile()->instances_by_type<IfcSchema::IfcBuildingStorey>();
