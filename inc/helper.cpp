@@ -368,7 +368,7 @@ std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> checkConnection(To
 	distanceMeasurer.LoadS1(roomShape);
 
 	std::vector<IfcSchema::IfcRelSpaceBoundary*> boundaryList;
-	std::vector<IfcSchema::IfcDoor*> connectedDoors; // TODO improve door implementation
+	std::vector<IfcSchema::IfcDoor*> connectedDoors; 
 	std::vector<std::tuple<IfcSchema::IfcProduct*, TopoDS_Shape>> newqProductList;
 
 	for (size_t j = 0; j < qProductList.size(); j++)
@@ -949,7 +949,6 @@ void helper::correctRooms()
 		indexRooms();
 	}
 
-
 	// get all rooms in a cluser
 	std::vector<roomLookupValue> roomValues = getFullRLookup();
 
@@ -957,25 +956,99 @@ void helper::correctRooms()
 	std::vector<double> roomVolume;
 	GProp_GProps gprop;
 
+	// get point inside of each room
 	for (size_t i = 0; i < roomValues.size(); i++)
 	{
 		BRepGProp::VolumeProperties(std::get<1>(roomValues[i]), gprop);
 		roomVolume.emplace_back(gprop.Mass());
 
-		BRepClass3d_SolidClassifier insideChecker;
-		insideChecker.Load(std::get<1>(roomValues[i]));
+		// check if center of mass lies inside of room
 		gp_Pnt potentialCenter = gprop.CentreOfMass();
+		gp_Pnt potentialCenterHigh = potentialCenter;
+		potentialCenterHigh.SetZ(potentialCenterHigh.Z() + 1000);
+		std::vector<gp_Pnt> lowLine = { potentialCenter,  potentialCenterHigh };
 
-		insideChecker.Perform(potentialCenter, 0.001);
+		auto faceTriangles = triangulateShape(&std::get<1>(roomValues[i]));
 
-		//if (insideChecker.State())
+		if (faceTriangles.size() == 0)
 		{
 			roomCenterPoints_.emplace_back(gprop.CentreOfMass());
 			continue;
 		}
 
+		int iCount = 0;
+		for (size_t l = 0; l < faceTriangles.size(); l++)
+		{
+			if (triangleIntersecting(lowLine, faceTriangles[l]))
+			{
+				iCount++;
+			}
+		}
+
+		if (iCount % 2 != 0) {
+			roomCenterPoints_.emplace_back(gprop.CentreOfMass());
+			continue;
+		}
+
+		// if not create replacement for the potential point
+		double distance = 999999;
+		gp_Pnt replacementPoint = { 0,0,0 };
 
 
+		for (size_t j = 0; j < faceTriangles.size(); j++)
+		{
+
+			bool isFlat = true;
+
+			if (faceTriangles[j].size() != 3)
+			{
+				continue;
+			}
+
+			for (size_t k = 1; k < faceTriangles[j].size(); k++)
+			{
+
+				// only select flat triangles
+				if (faceTriangles[j][k].Z() + 0.01 < faceTriangles[j][0].Z() || 
+					faceTriangles[j][k].Z() - 0.01 > faceTriangles[j][0].Z())
+				{
+					isFlat = false;
+					break;
+				}
+			}
+
+			if (!isFlat)
+			{
+				continue;
+			}
+
+			// compute centerpoint of the triangle
+			double sumX = 0;
+			double sumY = 0;
+			double sumZ = 0;
+
+			for (size_t k = 0; k < faceTriangles[j].size(); k++)
+			{
+				sumX += faceTriangles[j][k].X();
+				sumY += faceTriangles[j][k].Y();
+				sumZ += faceTriangles[j][k].Z();
+			}
+
+			gp_Pnt potentialReplacementPoint = { sumX / 3, sumY / 3, sumZ / 3 };
+
+			double pToPDistance = potentialReplacementPoint.Distance(potentialCenter);
+			if (pToPDistance < distance)
+			{
+				distance = pToPDistance;
+				replacementPoint = potentialReplacementPoint;
+			}
+
+		}
+
+		if (replacementPoint.Z() < potentialCenter.Z()) { replacementPoint.SetZ(replacementPoint.Z() + 0.10); }
+		if (replacementPoint.Z() > potentialCenter.Z()) { replacementPoint.SetZ(replacementPoint.Z() - 0.10); }
+		
+		roomCenterPoints_.emplace_back(replacementPoint);
 	}
 
 	// check which room is complex
@@ -1098,7 +1171,6 @@ std::vector<std::vector<gp_Pnt>> triangulateShape(TopoDS_Shape* shape) {
 				gp_Pnt p = mesh->Nodes().Value(theTriangle(k)).Transformed(trsf);
 				trianglePoints.emplace_back(p);
 			}
-
 			triangleMeshList.emplace_back(trianglePoints);
 		}
 
@@ -1114,8 +1186,6 @@ void helper::addObjectToIndex(T object) {
 	for (auto it = object->begin(); it != object->end(); ++it) {
 		IfcSchema::IfcProduct* product = *it;		
 
-
-
 		bg::model::box <BoostPoint3D> box = makeObjectBox(product);
 		if (bg::get<bg::min_corner, 0>(box) == bg::get<bg::max_corner, 0>(box) &&
 			bg::get<bg::min_corner, 1>(box) == bg::get<bg::max_corner, 1>(box)) {
@@ -1128,17 +1198,12 @@ void helper::addObjectToIndex(T object) {
 		bool hasCBBox = false;
 		bool matchFound = false;
 
-		//TODO get shape
-
 		if (product->data().type()->name() == "IfcDoor" || product->data().type()->name() == "IfcWindow")
 		{
 			// get potential nesting objects
 			std::vector<Value> qResult;
 			qResult.clear();
 			index_.query(bgi::intersects(box), std::back_inserter(qResult));
-
-			//printPoint(box.max_corner());
-			//printPoint(box.min_corner());
 
 			BRepExtrema_DistShapeShape distanceMeasurer;
 			distanceMeasurer.LoadS1(shape);

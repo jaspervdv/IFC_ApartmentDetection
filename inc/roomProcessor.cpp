@@ -856,62 +856,6 @@ void voxelfield::makeRooms(helperCluster* cluster)
 						}
 
 					}
-
-					/*if (sCount == 0 && std::get<0>(lookup)->data().type()->name() == "IfcRoof")
-					{
-						std::cout << std::get<0>(lookup)->data().toString() << std::endl;
-
-						BRep_Builder brepBuilder2;
-						BRepBuilderAPI_Sewing brepSewer2;
-
-						TopoDS_Solid newSolid;
-						brepBuilder2.MakeSolid(newSolid);
-
-						std::vector<TopoDS_Face> faceList;
-						std::vector<TopoDS_Face> newFaceList;
-
-						for (expl.Init(shape, TopAbs_FACE); expl.More(); expl.Next()) {
-							faceList.emplace_back(TopoDS::Face(expl.Current()));
-						}
-
-						for (size_t l = 0; l < faceList.size(); l++)
-						{
-							std::vector<gp_Pnt> facePointList;
-							TopoDS_Wire wire;
-							for (expl.Init(faceList[l], TopAbs_VERTEX); expl.More(); expl.Next())
-							{
-								TopoDS_Vertex vertex = TopoDS::Vertex(expl.Current());
-								facePointList.emplace_back(BRep_Tool::Pnt(vertex));
-							}
-
-							std::vector<TopoDS_Edge> faceEdgeList;
-							for (size_t m = 0; m < facePointList.size(); m += 2)
-							{
-								BRepBuilderAPI_MakeWire(wire, BRepBuilderAPI_MakeEdge(facePointList[m], facePointList[m + 1]));
-							}
-							newFaceList.emplace_back(BRepBuilderAPI_MakeFace(wire));
-						}
-
-						for (size_t l = 0; l < newFaceList.size(); l++) { brepSewer2.Add(newFaceList[l]); }
-
-						brepSewer2.Perform();
-						brepBuilder2.Add(newSolid, brepSewer2.SewedShape());
-						//aLSTools.Append(newSolid);
-					}*/
-					/*if (std::get<0>(lookup)->data().type()->name() == "IfcSlab" ||
-						std::get<0>(lookup)->data().type()->name() == "IfcRoof" || 
-						std::get<0>(lookup)->data().type()->name() == "IfcWall" || 
-						std::get<0>(lookup)->data().type()->name() == "IfcWindow")
-					{
-						aLSTools.Append(shape);
-					}
-					else
-					{
-						for (expl.Init(shape, TopAbs_SOLID); expl.More(); expl.Next()) {
-							aLSTools.Append(TopoDS::Solid(expl.Current()));
-
-						}
-					}*/
 				}
 			}
 

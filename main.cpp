@@ -45,6 +45,7 @@ std::vector<std::string> GetSources() {
 
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/BIM_Projekt_Golden_Nugget-Architektur_und_Ingenieurbau.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/SampleProject_Villa_2_7_animatedTrees.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/simple_models/covex_concave.ifc"
 	
 	//"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte 2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/On4/Stramien hoogte-2019-5.ifc"
@@ -56,7 +57,7 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_LFT_DigitalHub.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_SAN_DigitalHub.ifc"
 	 
-	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	 
