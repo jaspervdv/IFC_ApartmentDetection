@@ -58,8 +58,8 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_SAN_DigitalHub.ifc"
 	 
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
-	"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
-	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	 
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	 

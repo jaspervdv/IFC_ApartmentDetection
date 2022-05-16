@@ -1805,6 +1805,7 @@ void helper::voidShapeAdjust(T products)
 		IfcSchema::IfcElement* wallElement = wallProduct->as<IfcSchema::IfcElement>();
 		IfcSchema::IfcRelVoidsElement::list::ptr voidElementList = wallElement->HasOpenings();
 		std::vector<TopoDS_Shape> validVoidShapes;
+		double voidCount = voidElementList->size();
 
 		// find if the voids are filled or not
 		for (auto et = voidElementList->begin(); et != voidElementList->end(); ++et) {
@@ -1865,7 +1866,6 @@ void helper::voidShapeAdjust(T products)
 					}
 				}
 
-
 				if (inter)
 				{
 					break;
@@ -1883,6 +1883,13 @@ void helper::voidShapeAdjust(T products)
 		{
 			continue;
 		}
+		else if (validVoidShapes.size() == voidCount)
+		{
+			TopoDS_Shape finalShape = getObjectShape(wallProduct, false);
+			updateShapeLookup(wallProduct, finalShape, true);
+			updateIndex(wallProduct, finalShape);
+		}
+
 		else if (validVoidShapes.size() > 0 && voidElementList->size() > 0) {
 			// get a basepoint of the wall
 			std::vector<gp_Pnt> pList;;
