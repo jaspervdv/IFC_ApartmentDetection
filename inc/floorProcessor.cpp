@@ -280,12 +280,11 @@ std::vector<double> floorProcessor::computeFloorElevations(helper* data)
 	// make floor struct
 	std::vector<double> faceAreas = floorProcessor::getFaceAreas(floorFaces);
 
-	auto SmallestAllowedArea = 10 / data->getAreaMultiplier();
+	auto SmallestAllowedArea = 10 ;
 
 	std::vector<FloorStruct> floorList;
 	for (size_t i = 0; i < floorFaces.size(); i++)
 	{
-
 		// filter out small floor slabs
 		if (faceAreas[i] > SmallestAllowedArea)
 		{
@@ -700,7 +699,7 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 {
 	IfcParse::IfcFile* sourcefile = data->getSourceFile();
 	auto kernel = data->getKernel();
-	double lengthMulti = data->getUnits()[0];
+	double lengthMulti = data->getLengthMultiplier();
 
 	// make a vector with the height, spatial structure and a temp product  list
 	IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = sourcefile->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
@@ -722,10 +721,10 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 			)
 		);
 	}
+
 	std::sort(pairedContainers.begin(), pairedContainers.end());
 
 	double topBuffer = 0.2;
-
 
 	for (auto it = products->begin(); it != products->end(); ++it)
 	{
@@ -804,10 +803,6 @@ void floorProcessor::sortObjects(helper* data, IfcSchema::IfcProduct::list::ptr 
 				height = lowHeight;
 			}
 
-			if (product->data().id() == 10407707)
-			{
-				std::cout << height << std::endl;
-			}
 
 		}
 

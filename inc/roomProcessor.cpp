@@ -866,7 +866,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			aSplitter.SetRunParallel(Standard_True);
 			//aSplitter.SetFuzzyValue(0.001);
 			aSplitter.SetNonDestructive(Standard_True);
-
+			
 			aSplitter.Perform();
 
 			const TopoDS_Shape& aResult = aSplitter.Shape(); // result of the operation
@@ -1085,17 +1085,43 @@ void voxelfield::makeRooms(helperCluster* cluster)
 
 	// go through all old space objects and remove element space 
 	// TODO keep spaces not recreated?
+
+
+
 	for (size_t i = 0; i < cSize; i++)
 	{
+		
+
 		std::vector<roomLookupValue> roomValues = cluster->getHelper(i)->getFullRLookup();
 		for (size_t j = 0; j < roomValues.size(); j++)
 		{
 			IfcSchema::IfcSpace* space = std::get<0>(roomValues[j]);
 			if (space->CompositionType() == IfcSchema::IfcElementCompositionEnum::IfcElementComposition_ELEMENT)
 			{
+				std::vector<IfcSchema::IfcRelContainedInSpatialStructure*> deleteContainers;
+				IfcSchema::IfcRelContainedInSpatialStructure::list::ptr containers = cluster->getHelper(i)->getSourceFile()->instances_by_type<IfcSchema::IfcRelContainedInSpatialStructure>();
+				
+				for (auto it = containers->begin(); it != containers->end(); ++it)
+				{
+					IfcSchema::IfcRelContainedInSpatialStructure* structure = *it;
+					if (structure->RelatingStructure()->GlobalId() == space->GlobalId())
+					{
+						deleteContainers.emplace_back(structure);
+					}
+				}
+
 				cluster->getHelper(i)->getSourceFile()->removeEntity(space);
+
+				for (size_t j = 0; j < deleteContainers.size(); j++)
+				{
+					IfcSchema::IfcRelContainedInSpatialStructure* container = deleteContainers[j];
+					cluster->getHelper(i)->getSourceFile()->removeEntity(container);
+				}
 			}
 		}
+
+		
+
 	}
 
 	if (roomObjectList_.size() == 0) { return;}
@@ -1105,6 +1131,7 @@ void voxelfield::makeRooms(helperCluster* cluster)
 	// apply connectivity data to the rooms
 	cluster->updateRoomCData(roomObjectList_);
 	createGraph(cluster);
+
 }
 	
 std::vector<int> voxelfield::growRoom(int startIndx, int roomnum)

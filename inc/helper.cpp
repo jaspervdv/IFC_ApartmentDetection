@@ -1573,6 +1573,7 @@ TopoDS_Shape helper::getObjectShape(IfcSchema::IfcProduct* product, bool adjuste
 
 	if (!product->hasRepresentation()) {
 
+
 #ifdef USE_IFC4
 		IfcSchema::IfcRelAggregates::list::ptr decomposedProducts = product->IsDecomposedBy();
 #else

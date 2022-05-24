@@ -60,6 +60,11 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/examples/AC20-FZK-Haus.ifc"
+
+	//"D:/Documents/Uni/Thesis/sources/Models/Ken_models/Rabarberstraat144.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/Ken_models/CUVO_Ockenburghstraat_KOW.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/Ken_models/Savigliano.ifc"
 	 
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	 
