@@ -561,13 +561,13 @@ void voxelfield::writeGraph(std::string path)
 
 }
 
-std::vector<std::string> voxelfield::getSemanticMatch(std::vector<IfcSchema::IfcSpace*> semanticSources, double roomNum)
+std::vector<std::string> voxelfield::getSemanticMatch(std::vector<IfcSchema::IfcSpace*> semanticSources, int roomNum)
 {
 	// unload semantic data
 	double semanticListLenght = semanticSources.size();
 
-	std::string semanticName = "Automatic Space";
-	std::string semanticLongName = "Automatic Space: " + std::to_string(roomNum);
+	std::string semanticName = "Automatic Space " + std::to_string(roomNum);
+	std::string semanticLongName = "Automatic Space " + std::to_string(roomNum);
 	std::string semanticDescription = "";
 
 	if (semanticListLenght > 0)

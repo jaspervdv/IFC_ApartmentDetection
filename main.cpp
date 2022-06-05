@@ -57,7 +57,7 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_LFT_DigitalHub.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_SAN_DigitalHub.ifc"
 	 
-	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
+	"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/examples/AC20-FZK-Haus.ifc"
@@ -65,7 +65,10 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Ken_models/Rabarberstraat144.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Ken_models/CUVO_Ockenburghstraat_KOW.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/Ken_models/Savigliano.ifc"
-	 
+	//"D:/Documents/Uni/Thesis/sources/Models/Ken_models/P120_SubZero_TOB_2017-10-23.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/Ken_models/Witte_de_Withstraat_(20150508).ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/Ken_models/Myran_modified_Benchmark.ifc"
+
 	//"D:/Documents/Uni/Thesis/sources/Models/exports/Exported_AC-20-Smiley-West-10-Bldg.ifc"
 	 
 	//"D:/Documents/Uni/Thesis/sources/Models/Rotterdam/9252_VRI_Boompjes_constructie.ifc",

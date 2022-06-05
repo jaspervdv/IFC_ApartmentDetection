@@ -114,7 +114,7 @@ private:
 	void createGraph(helperCluster* cluster);
 
 	// returns vector with: semanticName, semanticLongName, semanticDescription
-	std::vector<std::string> getSemanticMatch(std::vector< IfcSchema::IfcSpace*> semanticSources, double roomNum);
+	std::vector<std::string> getSemanticMatch(std::vector< IfcSchema::IfcSpace*> semanticSources, int roomNum);
 
 public:
 

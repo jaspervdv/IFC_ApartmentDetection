@@ -2115,8 +2115,24 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, bo
 
 						if (std::get<2>(lookup)->size() == 2)
 						{
-							std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
-							std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
+							bool found = false;
+							auto connection = rObject->getConnections();
+
+							for (size_t l = 0; l < connection.size(); l++)
+							{
+								if (connection[l] == std::get<2>(lookup)[0][0])
+								{
+									found = true;
+									break;
+								}
+							}
+
+							if (!found)
+							{
+								doorCount++;
+								std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
+								std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
+							}
 						}
 						
 						break;
