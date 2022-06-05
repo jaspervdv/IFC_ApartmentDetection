@@ -57,7 +57,7 @@ std::vector<std::string> GetSources() {
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_LFT_DigitalHub.ifc",
 	//"D:/Documents/Uni/Thesis/sources/Models/Revit_Example_Models/FM_SAN_DigitalHub.ifc"
 	 
-	"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
+	//"D:/Documents/Uni/Thesis/sources/Models/AC-20-Smiley-West-10-Bldg.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-Institute-Var-2.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/AC20-FZK-Haus.ifc"
 	//"D:/Documents/Uni/Thesis/sources/Models/examples/AC20-FZK-Haus.ifc"
@@ -176,6 +176,7 @@ void compareElevationsOutput(const std::vector<double> left, const std::vector<d
 	}
 }
 
+
 bool yesNoQuestion() {
 	std::string cont = "";
 
@@ -186,6 +187,44 @@ bool yesNoQuestion() {
 		if (cont == "Y" || cont == "y") { return true; }
 		if (cont == "N" || cont == "n") { return false; }
 	}
+}
+
+
+bool checkproxy(helperCluster* cluster) {
+
+	double proxyCount = 0;
+	double totalCount = 0;
+	bool hasLot = false;
+
+	for (size_t i = 0; i < cluster->getSize(); i++)
+	{
+		helper* h = cluster->getHelper(i);
+
+		if (h->getHasProxy()) { proxyCount += h->getProxyNum(); }
+
+		if (h->getHasLotProxy()) { hasLot = true; }
+
+		totalCount += h->getObjectCount();
+	}
+
+	if (proxyCount == 0) { return true; }
+
+	if (hasLot)
+	{
+		std::cout << "[WARNING] A large amount of IfcBuildingElementProxy objects are present in the model!" << std::endl;
+		std::cout << "[INFO] Process is terminated" << std::endl;
+		return false;
+	}
+
+	std::cout << "[INFO] " << proxyCount << " of " << totalCount <<  " evaluated objects are IfcBuildingElementProxy objects" << std::endl;
+	std::cout << std::endl;
+	std::cout << "Continue processing? (Y/N):" << std::endl;
+	
+	bool answer = yesNoQuestion();
+	
+	std::cout << std::endl;
+	
+	return answer;
 }
 
 
@@ -278,6 +317,11 @@ int main(int argc, char** argv) {
 	}
 
 	hCluster->internaliseData();
+
+	if (!checkproxy(hCluster))
+	{
+		return 0;
+	}
 
 	// evaluate the storeys
 	std::vector<double> floorElevation = floorProcessor::computeFloorElevations(hCluster->getHelpers());

@@ -1,4 +1,4 @@
- #define USE_IFC4
+// #define USE_IFC4
 
 #ifdef USE_IFC4
 #define IfcSchema Ifc4
@@ -189,11 +189,18 @@ private:
 	double area_ = 0;
 	double volume_ = 0;
 
+	double objectCount = 0;
+
 	bool hasFloors = false;
 	bool isConstruct = false; 
 	bool isPartial = false;
 	bool hasGeo = false;
 	bool hasRooms = false;
+
+	double maxProxyP = 0.3;
+	double proxyCount = 0;
+	bool hasProxy = false;
+	bool hasLotProxy = false;
 
 	gp_Pnt lllPoint_;
 	gp_Pnt urrPoint_;
@@ -301,6 +308,14 @@ public:
 	bool getHasGeo() { return hasGeo; }
 
 	bool getHasRoom() { return hasRooms; }
+
+	double getProxyNum() { return proxyCount; }
+
+	double getObjectCount() { return objectCount; }
+
+	bool getHasProxy() { return hasProxy; }
+
+	bool getHasLotProxy() { return hasLotProxy; }
 
 	gp_Pnt getLllPoint() { return lllPoint_; }
 

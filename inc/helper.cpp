@@ -702,6 +702,25 @@ void helper::internalizeGeo()
 
 	// get products
 	IfcSchema::IfcProduct::list::ptr products = file_->instances_by_type<IfcSchema::IfcProduct>();
+	objectCount = products->size();
+
+	for (auto it = products->begin(); it != products->end(); ++it) {
+		IfcSchema::IfcProduct* product = *it;
+
+		if (product->data().type()->name() == "IfcBuildingElementProxy")
+		{
+			proxyCount++;
+		}
+	}
+	
+	if (proxyCount > 0)
+	{
+		hasProxy = true;
+	}
+	if (proxyCount/objectCount >= maxProxyP)
+	{
+		hasLotProxy = true;
+	}
 
 	std::vector<gp_Pnt> pointList = getAllPoints(products);
 
