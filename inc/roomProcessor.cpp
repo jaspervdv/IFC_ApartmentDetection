@@ -2,11 +2,6 @@
 
 
 void voxelfield::createGraph(helperCluster* cluster) {
-	// splitting variables
-	int hallwayNum = 6;
-	int minroom = 2;
-	double minArea = 32; //m2
-
 	// update data to outside 
 	int cSize = cluster->getSize();
 
@@ -38,7 +33,6 @@ void voxelfield::createGraph(helperCluster* cluster) {
 				{
 					std::get<2>(lookup[j])[0][0]->addConnection(outsideObject);
 				}
-
 			}
 		}
 	}
@@ -81,7 +75,7 @@ void voxelfield::createGraph(helperCluster* cluster) {
 				roomObject* evaluatedRoom = bufferList[j];
 				std::vector<roomObject*> connections = evaluatedRoom->getConnections();
 
-				if (evaluatedRoom->getDoorCount() >= hallwayNum)
+				if (evaluatedRoom->getDoorCount() >= hallwayNum_)
 				{
 					waitingList.emplace_back(evaluatedRoom);
 					continue;
@@ -94,7 +88,6 @@ void voxelfield::createGraph(helperCluster* cluster) {
 				{
 					if (connections[k]->getSNum() == -1 && connections[k]->isInside())
 					{
-
 						connections[k]->setSNum(counter);
 						tempBufferList.emplace_back(connections[k]);
 					}
@@ -107,8 +100,8 @@ void voxelfield::createGraph(helperCluster* cluster) {
 
 			if (tempBufferList.size() == 0)
 			{
-				if (totalAreaApartment < minArea ||
-					currentApp.size() < minroom)
+				if (totalAreaApartment < minArea_ ||
+					currentApp.size() < minRoom_)
 				{
 					for (size_t j = 0; j < waitingList.size(); j++)
 					{
@@ -131,7 +124,7 @@ void voxelfield::createGraph(helperCluster* cluster) {
 						}
 					}
 				}
-				else if (totalAreaApartment > minArea)
+				else if (totalAreaApartment > minArea_)
 				{
 					for (size_t j = 0; j < waitingList.size(); j++)
 					{
@@ -152,7 +145,6 @@ void voxelfield::createGraph(helperCluster* cluster) {
 				recurseList.clear();
 			}
 
-
 			bufferList.clear();
 			bufferList = tempBufferList;
 		}
@@ -168,9 +160,7 @@ void voxelfield::createGraph(helperCluster* cluster) {
 		{
 			currentRoom->getSelf()->setDescription(currentRoom->getSelf()->Description() + "apartment: " + std::to_string(currentRoom->getSNum()));
 		}
-
 	}
-
 }
 
 
@@ -493,6 +483,10 @@ voxelfield::voxelfield(helperCluster* cluster, bool isFlat)
 
 		std::cout << totalVoxels_ << std::endl;
 	}
+
+	hallwayNum_ = cluster->getHallwayNum();
+	minRoom_ = cluster->getMinRoomNum();
+	minArea_ = cluster->getMinArea();
 }
 
 void voxelfield::writeGraph(std::string path)
@@ -1070,6 +1064,21 @@ void voxelfield::makeRooms(helperCluster* cluster)
 			roomProducts.get()->push(room);
 
 			roomObject* rObject = new roomObject(room, roomObjectList_.size());
+
+			TopoDS_Shape roomShape = unscaledRoom;
+			auto roomFootprint = getRoomFootprint(roomShape);
+
+			double area = 0;
+
+			GProp_GProps gprop;
+			for (size_t j = 0; j < roomFootprint.size(); j++)
+			{
+				BRepGProp::SurfaceProperties(roomFootprint[j], gprop);
+				area += gprop.Mass();
+			}
+
+			rObject->setArea(area);
+
 			roomObjectList_.emplace_back(rObject);
 			cluster->updateConnections(unMovedUnitedScaledRoom, rObject, qBox, connectedObjects);
 			roomnum++;

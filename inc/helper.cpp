@@ -816,6 +816,11 @@ void helper::indexGeo()
 		addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
 		addObjectToIndex<IfcSchema::IfcWindow::list::ptr>(file_->instances_by_type<IfcSchema::IfcWindow>());
 
+		if (useProxy)
+		{
+			addObjectToIndex<IfcSchema::IfcBuildingElementProxy::list::ptr>(file_->instances_by_type<IfcSchema::IfcBuildingElementProxy>());
+		}
+
 		// find valid voids
 		applyVoids();
 		hasIndex_ = true;
@@ -2129,7 +2134,7 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, bo
 					IfcSchema::IfcProduct* qProduct = connectedDoors[i];
 					if (std::get<0>(lookup)->data().id() == qProduct->data().id())
 					{
-						doorCount++;
+						//doorCount++;
 						std::get<2>(lookup)->emplace_back(rObject);
 
 						if (std::get<2>(lookup)->size() == 2)
@@ -2152,6 +2157,10 @@ void helperCluster::updateConnections(TopoDS_Shape room, roomObject* rObject, bo
 								std::get<2>(lookup)[0][0]->addConnection(std::get<2>(lookup)[0][1]);
 								std::get<2>(lookup)[0][1]->addConnection(std::get<2>(lookup)[0][0]);
 							}
+						}
+						else
+						{
+							doorCount++;
 						}
 						
 						break;
@@ -2312,11 +2321,6 @@ std::vector<roomObject*> helperCluster::createGraphData()
 }
 
 std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rObjectList) {
-	// splitting variables
-	int hallwayNum = 6;
-	int minroom = 2;
-	double minArea = 32; //m2
-	
 	// update data to outside 
 	int cSize = size_;
 
@@ -2391,7 +2395,7 @@ std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rOb
 				roomObject* evaluatedRoom = bufferList[j];
 				std::vector<roomObject*> connections = evaluatedRoom->getConnections();
 
-				if (evaluatedRoom->getDoorCount() >= hallwayNum)
+				if (evaluatedRoom->getDoorCount() >= hallwayNum_)
 				{
 					waitingList.emplace_back(evaluatedRoom);
 					continue;
@@ -2417,8 +2421,8 @@ std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rOb
 
 			if (tempBufferList.size() == 0)
 			{
-				if (totalAreaApartment < minArea ||
-					currentApp.size() < minroom)
+				if (totalAreaApartment < minArea_ ||
+					currentApp.size() < minRoom_)
 				{
 					for (size_t j = 0; j < waitingList.size(); j++)
 					{
@@ -2441,7 +2445,7 @@ std::vector<roomObject*> helperCluster::createGraph(std::vector<roomObject*> rOb
 						}
 					}
 				}
-				else if (totalAreaApartment > minArea)
+				else if (totalAreaApartment > minArea_)
 				{
 					for (size_t j = 0; j < waitingList.size(); j++)
 					{
@@ -2675,4 +2679,12 @@ void helperCluster::determineRoomBoundaries() {
 		}
 		std::cout << counter << " of " << spaceListSize << std::endl;
 	}
+}
+
+void helperCluster::setUseProxy(bool b) {
+	for (size_t i = 0; i < helperList.size(); i++)
+	{
+		helperList[i]->setUseProxy(b);
+	}
+
 }

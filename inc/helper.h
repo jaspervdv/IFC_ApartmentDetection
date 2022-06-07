@@ -1,4 +1,4 @@
-// #define USE_IFC4
+#define USE_IFC4
 
 #ifdef USE_IFC4
 #define IfcSchema Ifc4
@@ -148,6 +148,10 @@ private:
 	std::vector<helper*> helperList;
 	int size_ = 0;
 
+	double hallwayNum_ = 5;
+	double minRoom_ = 2;
+	double minArea_ = 32;
+
 public:
 	std::vector<helper*> getHelper() const { return helperList; }
 
@@ -177,6 +181,14 @@ public:
 	void updateRoomCData(std::vector<roomObject*> rObjectList);
 
 	void determineRoomBoundaries();
+
+	void setUseProxy(bool b = true);
+
+	void setApRules(int hallway, int minRooms, double minArea) { hallwayNum_ = hallway; minRoom_ = minRooms; minArea_ = minArea; }
+
+	int getHallwayNum() { return hallwayNum_; }
+	int getMinRoomNum() { return minRoom_; }
+	int getMinArea() { return minArea_; }
 
 };
 
@@ -229,6 +241,9 @@ private:
 
 	std::map < int, TopoDS_Shape > shapeLookup_;
 	std::map < int, TopoDS_Shape > adjustedshapeLookup_;
+
+	bool useProxy = false;
+	std::vector<std::string>* roomBoundingObjects = {};
 
 	// sets the unit multipliers to allow for the use of other units than metres
 	void setUnits(IfcParse::IfcFile* file);
@@ -381,6 +396,8 @@ public:
 	void writeToFile(std::string path);
 
 	void setDepending(bool i) { isPartial = i; }
+
+	void setUseProxy(bool b) { useProxy = b; }
 
 	~helper() {};
 

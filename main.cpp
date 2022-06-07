@@ -190,6 +190,83 @@ bool yesNoQuestion() {
 }
 
 
+int numQuestion(int n, bool lower = true) {
+	while (true)
+	{
+		bool validInput = true;
+		std::string stringNum = "";
+
+		std::cout << "Num: ";
+		std::cin >> stringNum;
+
+		for (size_t i = 0; i < stringNum.size(); i++)
+		{
+			if (!std::isdigit(stringNum[i]))
+			{
+				validInput = false;
+			}
+		}
+
+		if (validInput)
+		{
+			int intNum = std::stoi(stringNum) - 1;
+			if (!lower)
+			{
+				if (n >= intNum + 1) {
+					return intNum;
+				}
+			}
+			else if (lower)
+			{
+				if (n >= intNum + 1 &&  intNum >= 0) {
+					return intNum;
+				}
+			}
+
+		}
+		std::cout << "\n [INFO] Please enter a valid number! \n" << std::endl;
+	}
+}
+
+double numQuestionD(int n, bool lower = true) {
+	while (true)
+	{
+		bool validInput = true;
+		std::string stringNum = "";
+
+		std::cout << "Num: ";
+		std::cin >> stringNum;
+
+		for (size_t i = 0; i < stringNum.size(); i++)
+		{
+			if (!std::isdigit(stringNum[i]))
+			{
+				validInput = false;
+			}
+		}
+
+		if (validInput)
+		{
+			double intNum = std::stod(stringNum);
+			if (!lower)
+			{
+				if (n >= intNum) {
+					return intNum;
+				}
+			}
+			else if (lower)
+			{
+				if (n >= intNum && intNum >= 0) {
+					return intNum;
+				}
+			}
+
+		}
+		std::cout << "\n [INFO] Please enter a valid number! \n" << std::endl;
+	}
+}
+
+
 bool checkproxy(helperCluster* cluster) {
 
 	double proxyCount = 0;
@@ -218,7 +295,7 @@ bool checkproxy(helperCluster* cluster) {
 
 	std::cout << "[INFO] " << proxyCount << " of " << totalCount <<  " evaluated objects are IfcBuildingElementProxy objects" << std::endl;
 	std::cout << std::endl;
-	std::cout << "Continue processing? (Y/N):" << std::endl;
+	std::cout << "Continue processing? (Y/N):";
 	
 	bool answer = yesNoQuestion();
 	
@@ -228,12 +305,60 @@ bool checkproxy(helperCluster* cluster) {
 }
 
 
+void askBoudingRules(helperCluster* hCluster) {
+	std::cout << "Please select a desired rulset" << std::endl;
+	std::cout << "1. Default room bounding objects" << std::endl;
+	std::cout << "2. Default room bounding objects + IfcBuildingElementProxy objects? " << std::endl;
+	std::cout << "3. Use custom object selection as room bounding objects (not yet implemented) " << std::endl;
+
+	int ruleNum = numQuestion(3);
+
+	if (ruleNum == 1)
+	{
+		hCluster->setUseProxy(true);
+	}
+	if (ruleNum == 3)
+	{
+		// TODO make custom rules available 
+	}
+
+	std::cout << std::endl;
+}
+
+void askApartmentRules(helperCluster* hCluster) {
+	std::cout << "Please select a desired rulset" << std::endl;
+	std::cout << "1. Default apartment construction rules" << std::endl;
+	std::cout << "2. Custom apartment construction rules" << std::endl;
+
+	int ruleNum = numQuestion(2);
+
+	if (ruleNum == 1)
+	{
+		std::cout << std::endl;
+		std::cout << "Minimal apartment room count (int)" << std::endl;
+		int roomCount = numQuestion(15) + 1;
+
+		std::cout << std::endl;
+		std::cout << "Minimal apartment area size (double)" << std::endl;
+		double apArea = numQuestionD(1000);
+
+		std::cout << std::endl;
+		std::cout << "Minimal connections needed to be considered splitting point (int)" << std::endl;;
+		int conCount = numQuestion(15) + 1;
+
+		hCluster->setApRules(conCount, roomCount, apArea);
+	}
+	std::cout << std::endl;
+}
+
+
 int main(int argc, char** argv) {
 
 	// outputs errors related to the selected objects
 	if (false) { Logger::SetOutput(&std::cout, &std::cout); }
 
 	std::vector<std::string> sourcePathArray = GetSources();
+	bool hasAskedBoundingRules = false;
 
 	// make export path
 	std::vector<std::string> exportPathArray;
@@ -263,34 +388,11 @@ int main(int argc, char** argv) {
 		std::cout << "[INFO] One file found, considered combination file" << std::endl;
 	}
 	else {
-		while (true)
-		{
-			bool validInput = true;
-			std::string stringNum = "";
 
-			std::cout << "Please enter number of construction model, if no constuction model enter 0." << std::endl;
-			for (size_t i = 0; i < fileNames.size(); i++) { std::cout << i + 1 << ": " << fileNames[i] << std::endl; }
-			std::cout << "Num: ";
-			std::cin >> stringNum;
+		std::cout << "Please enter number of construction model, if no constuction model enter 0." << std::endl;
+		for (size_t i = 0; i < fileNames.size(); i++) { std::cout << i + 1 << ": " << fileNames[i] << std::endl; }
+		constructionIndx = numQuestion(fileNames.size(), false);
 
-			for (size_t i = 0; i < stringNum.size(); i++)
-			{
-				if (!std::isdigit(stringNum[i]))
-				{
-					validInput = false;
-				}
-			}
-
-			if (validInput)
-			{
-				constructionIndx = std::stoi(stringNum) - 1;
-				if (fileNames.size() >= constructionIndx + 1) {
-					break;
-				}
-			}
-
-			std::cout << "\n [INFO] Please enter a valid number! \n" << std::endl;
-		}
 	}
 
 	std::cout << std::endl;
@@ -369,6 +471,15 @@ int main(int argc, char** argv) {
 	std::cout << "Reconstruct room and apartment data? (Y/N): ";
 	if (yesNoQuestion())
 	{
+		std::cout << std::endl;
+
+		if (!hCluster->getHelper(0)->hasIndex())
+		{
+			askBoudingRules(hCluster);
+		}
+
+		std::cout << std::endl;
+
 		if (sourcePathArray.size() != 1)
 		{
 			while (true)
@@ -405,6 +516,8 @@ int main(int argc, char** argv) {
 			hCluster->getHelper(0)->setHasRooms();
 		}
 
+		askApartmentRules(hCluster);
+
 		for (int i = 0; i < hCluster->getSize(); i++)
 		{
 			hCluster->getHelper(i)->indexGeo();
@@ -428,18 +541,22 @@ int main(int argc, char** argv) {
 		std::cout << "Reconstruct complex roomobjects present in the original model? (Y/N): ";
 		if (yesNoQuestion())
 		{
-
 			for (int i = 0; i < hCluster->getSize(); i++)
 			{
 				hCluster->getHelper(i)->correctRooms();
 			}
-
 		}
 
 		std::cout << std::endl;
 		std::cout << "Reconstruct topologic room relations? (Y/N): ";
 		if (yesNoQuestion())
 		{
+			if (!hCluster->getHelper(0)->hasIndex())
+			{
+				std::cout << std::endl;
+				askBoudingRules(hCluster);
+			}
+
 			hCluster->determineRoomBoundaries();
 		}
 
@@ -448,6 +565,14 @@ int main(int argc, char** argv) {
 		std::cout << "Construct Graph data? (Y/N): ";
 		if (yesNoQuestion())
 		{
+			if (!hCluster->getHelper(0)->hasIndex())
+			{
+				std::cout << std::endl;
+				askBoudingRules(hCluster);
+			}
+
+			askApartmentRules(hCluster);
+
 			std::vector<roomObject*> roomobjects = hCluster->createGraphData();
 			hCluster->updateRoomCData(roomobjects);
 			roomobjects = hCluster->createGraph(roomobjects);

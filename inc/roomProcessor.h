@@ -81,6 +81,10 @@ private:
 
 	double planeRotation_ = 0;
 
+	double hallwayNum_ = 5;
+	double minRoom_ = 2;
+	double minArea_ = 32;
+
 	// -1 is intersected 0 is not assigned 1..n is room assignement;
 	std::vector<int> Assignment_;
 	std::map<int, voxel*> VoxelLookup_;
