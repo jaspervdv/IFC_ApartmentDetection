@@ -152,6 +152,8 @@ private:
 	double minRoom_ = 2;
 	double minArea_ = 32;
 
+	std::vector<std::string> objectList_;
+
 public:
 	std::vector<helper*> getHelper() const { return helperList; }
 
@@ -189,6 +191,8 @@ public:
 	int getHallwayNum() { return hallwayNum_; }
 	int getMinRoomNum() { return minRoom_; }
 	int getMinArea() { return minArea_; }
+
+	std::list<std::string> getObjectList();
 
 };
 
@@ -243,7 +247,9 @@ private:
 	std::map < int, TopoDS_Shape > adjustedshapeLookup_;
 
 	bool useProxy = false;
-	std::vector<std::string>* roomBoundingObjects = {};
+	std::list<std::string>* roomBoundingObjects_ = {};
+	bool useCustom = false;
+	bool useCustomFull = false;
 
 	// sets the unit multipliers to allow for the use of other units than metres
 	void setUnits(IfcParse::IfcFile* file);
@@ -290,6 +296,8 @@ public:
 
 	// corrects room classification
 	void correctRooms();
+
+	std::list<std::string> getObjectTypes();
 
 	// returns a vector with length, area and volume multipliers
 	std::vector<double> getUnits() const { return { length_, area_, volume_ }; }
@@ -343,6 +351,8 @@ public:
 	const bgi::rtree<Value, bgi::rstar<treeDepth>>* getConnectivityIndexPointer() { return &cIndex_; }
 
 	const bgi::rtree<Value, bgi::rstar<treeDepth>>* getRoomIndexPointer() { return &rIndex_; }
+
+	void setRoomBoundingObjects(std::list<std::string>* objectList, bool custom, bool customFull) { roomBoundingObjects_ = objectList; useCustom = custom; useCustomFull = customFull; };
 
 	bool hasClookup() { return hasCIndex_; }
 

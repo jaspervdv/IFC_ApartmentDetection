@@ -793,32 +793,55 @@ void helper::indexGeo()
 
 	if (!hasIndex_)
 	{
-		// add the floorslabs to the rtree
-		addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
-		addObjectToIndex<IfcSchema::IfcRoof::list::ptr>(file_->instances_by_type<IfcSchema::IfcRoof>());
-
-		// add the walls to the rtree
-		addObjectToIndex<IfcSchema::IfcWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcWall>());
-		addObjectToIndex<IfcSchema::IfcCovering::list::ptr>(file_->instances_by_type<IfcSchema::IfcCovering>());
-
-		// add the columns to the rtree TODO sweeps
-		addObjectToIndex<IfcSchema::IfcColumn::list::ptr>(file_->instances_by_type<IfcSchema::IfcColumn>());
-
-		// add the beams to the rtree
-		addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());
-
-		// add the curtain walls to the rtree
-		addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
-		addObjectToIndex<IfcSchema::IfcPlate::list::ptr>(file_->instances_by_type<IfcSchema::IfcPlate>());
-		addObjectToIndex<IfcSchema::IfcMember::list::ptr>(file_->instances_by_type<IfcSchema::IfcMember>());
-
-		// add doors to the rtree (for the appartment detection)
-		addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
-		addObjectToIndex<IfcSchema::IfcWindow::list::ptr>(file_->instances_by_type<IfcSchema::IfcWindow>());
-
-		if (useProxy)
+		if (!useCustomFull)
 		{
-			addObjectToIndex<IfcSchema::IfcBuildingElementProxy::list::ptr>(file_->instances_by_type<IfcSchema::IfcBuildingElementProxy>());
+			// add the floorslabs to the rtree
+			addObjectToIndex<IfcSchema::IfcSlab::list::ptr>(file_->instances_by_type<IfcSchema::IfcSlab>());
+			addObjectToIndex<IfcSchema::IfcRoof::list::ptr>(file_->instances_by_type<IfcSchema::IfcRoof>());
+
+			// add the walls to the rtree
+			addObjectToIndex<IfcSchema::IfcWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcWall>());
+			addObjectToIndex<IfcSchema::IfcCovering::list::ptr>(file_->instances_by_type<IfcSchema::IfcCovering>());
+
+			// add the columns to the rtree TODO sweeps
+			addObjectToIndex<IfcSchema::IfcColumn::list::ptr>(file_->instances_by_type<IfcSchema::IfcColumn>());
+
+			// add the beams to the rtree
+			addObjectToIndex<IfcSchema::IfcBeam::list::ptr>(file_->instances_by_type<IfcSchema::IfcBeam>());
+
+			// add the curtain walls to the rtree
+			addObjectToIndex<IfcSchema::IfcCurtainWall::list::ptr>(file_->instances_by_type<IfcSchema::IfcCurtainWall>());
+			addObjectToIndex<IfcSchema::IfcPlate::list::ptr>(file_->instances_by_type<IfcSchema::IfcPlate>());
+			addObjectToIndex<IfcSchema::IfcMember::list::ptr>(file_->instances_by_type<IfcSchema::IfcMember>());
+
+			// add doors to the rtree (for the appartment detection)
+			addObjectToIndex<IfcSchema::IfcDoor::list::ptr>(file_->instances_by_type<IfcSchema::IfcDoor>());
+			addObjectToIndex<IfcSchema::IfcWindow::list::ptr>(file_->instances_by_type<IfcSchema::IfcWindow>());
+
+			if (useProxy)
+			{
+				addObjectToIndex<IfcSchema::IfcBuildingElementProxy::list::ptr>(file_->instances_by_type<IfcSchema::IfcBuildingElementProxy>());
+			}
+		}
+		if (useCustom)
+		{
+			IfcSchema::IfcProduct::list::ptr productList = file_->instances_by_type<IfcSchema::IfcProduct>();
+			
+			for (auto it = roomBoundingObjects_->begin(); it != roomBoundingObjects_->end(); ++it) {
+				
+				IfcSchema::IfcProduct::list::ptr selectedlist(new IfcSchema::IfcProduct::list);
+
+				for (auto et = productList->begin(); et != productList->end(); ++et)
+				{
+					IfcSchema::IfcProduct* product = *et;
+
+					if (*it == boost::to_upper_copy<std::string>(product->data().type()->name()))
+					{
+						selectedlist.get()->push(product);
+					}
+				}
+				addObjectToIndex<IfcSchema::IfcProduct::list::ptr>(selectedlist);
+			}
 		}
 
 		// find valid voids
@@ -1152,6 +1175,24 @@ void helper::correctRooms()
 			gp_Pnt centerOfMass = gprop.CentreOfMass();
 		}
 	}
+}
+
+std::list<std::string> helper::getObjectTypes() {
+
+	IfcSchema::IfcProduct::list::ptr products = file_->instances_by_type<IfcSchema::IfcProduct>();
+
+	std::list<std::string> pList;
+
+	for (auto it = products->begin(); it != products->end(); ++it) {
+		IfcSchema::IfcProduct* product = *it;
+
+		pList.emplace_back(boost::to_upper_copy<std::string>(product->data().type()->name()));
+	}
+
+	pList.sort();
+	pList.unique();
+
+	return pList;
 }
 
 std::vector<std::vector<gp_Pnt>> helper::triangulateProduct(IfcSchema::IfcProduct* product)
@@ -2018,7 +2059,6 @@ void helperCluster::internaliseData()
 		urrPoint_ = helperList[0]->getUrrPoint();
 		originRot_ = helperList[0]->getRotation();
 
-
 		if (debug)
 		{
 			std::cout << "cluster:" << std::endl;
@@ -2063,6 +2103,7 @@ void helperCluster::internaliseData()
 			if (addUrrPoint.Y() > urrPoint_.Y()) { urrPoint_.SetY(addUrrPoint.Y()); }
 			if (addUrrPoint.Z() > urrPoint_.Z()) { urrPoint_.SetZ(addUrrPoint.Z()); }
 		}
+
 	}
 
 	hasBbox_ = true;
@@ -2686,5 +2727,24 @@ void helperCluster::setUseProxy(bool b) {
 	{
 		helperList[i]->setUseProxy(b);
 	}
+}
+
+std::list<std::string> helperCluster::getObjectList() {
+	
+	std::list<std::string> typeListLong;
+
+	for (size_t i = 0; i < size_; i++)
+	{	
+		std::list<std::string> typeList = helperList[i]->getObjectTypes();
+
+		for (auto it = typeList.begin(); it != typeList.end(); ++it) {
+			typeListLong.emplace_back(*it);
+		}
+	}
+
+	typeListLong.sort();
+	typeListLong.unique();
+
+	return typeListLong;
 
 }
